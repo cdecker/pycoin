@@ -2,7 +2,16 @@
 pycoin
 ======
 
-Minimalistic python implementation of the Bitcoin networking stack
+Minimalistic python implementation of the Bitcoin networking
+stack. This library was developed to facilitate measurements in the
+Bitcoin network for some of my papers. It does include everything that
+is needed to connect and participate in the network, it does however
+not contain any crypto implementations other than the checksum
+mechanism. If you find this work useful please contribute back your
+modifications or give me a
+[shout](http://www.disco.ethz.ch/members/cdecker.html). Should you
+have a nice idea for a project, we're always looking for fun stuff to
+implement.
 
 Installation
 ------------
