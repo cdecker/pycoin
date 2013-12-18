@@ -132,7 +132,3 @@ class Test(unittest.TestCase):
         buf = BytesIO()
         a.toWire(buf)
         self.assertEquals(b.getvalue().encode("hex"), buf.getvalue().encode("hex"))
-
-if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testVarLength']
-    unittest.main()
