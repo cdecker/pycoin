@@ -12,6 +12,7 @@ setup(
     long_description=open('README.md').read(),
     install_requires=[
         "Twisted >= 13.1.0",
+        "gevent"
     ],
     setup_requires=['nose>=1.0'],
     test_suite='test',
