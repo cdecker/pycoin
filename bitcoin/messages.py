@@ -33,7 +33,10 @@ class Address(Packet):
     type = None
     def __init__(self, ip = None, isIPv4 = True, port = 8333, services = protocol_services, timestamp = None):
         self.isIPv4 = isIPv4
-        self.ip = ip
+        if ip:
+            self.ip = socket.gethostbyname(ip)
+        else:
+            self.ip = None
         self.timestamp = timestamp
         self.port = port
         self.services = services

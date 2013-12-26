@@ -3,8 +3,8 @@ from cStringIO import StringIO
 
 from bitcoin.utils import encodeVarLength, decodeVarLength
 from _pyio import BytesIO
-from mock import MagicMock, Mock
-from bitcoin.gevent import Connection
+#from mock import MagicMock, Mock
+from bitcoin.ge import Connection, NetworkClient
 
 version_message = "".join("""
         f9 be b4 d9 76 65 72 73 69 6f 6e 00 00 00 00 00
@@ -18,9 +18,10 @@ version_message = "".join("""
         """.split()).decode("hex")
 
 
-class Test(unittest.TestCase):
+nc = NetworkClient()
+connection = nc.connect(("seed.bitcoin.sipa.be",8333))
 
-
+"""
     def testConnectionRead(self):
         
         def recv_result(l):
@@ -35,4 +36,4 @@ class Test(unittest.TestCase):
         c.run()
         
         
-        
+    """     

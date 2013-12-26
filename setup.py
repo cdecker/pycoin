@@ -16,4 +16,5 @@ setup(
     ],
     setup_requires=['nose>=1.0'],
     test_suite='test',
+    tests_require=['mock'],
 )
