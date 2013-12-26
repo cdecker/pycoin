@@ -19,7 +19,6 @@ from _pyio import BytesIO
 from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet
 from gevent.greenlet import Greenlet
 from gevent.pool import Group
-from sets import Set
 import random
 
 class ConnectionLostException(Exception):
@@ -69,9 +68,9 @@ class PooledNetworkClient(NetworkClient):
     def __init__(self, pool_size=500):
         NetworkClient.__init__(self)
         self.pool_size = pool_size
-        self.open_connections = Set()
-        self.unreachable_peers = Set()
-        self.known_peers = Set()
+        self.open_connections = set()
+        self.unreachable_peers = set()
+        self.known_peers = set()
         spawn_later(5, self.pool_maintenance)
         # TODO implement
         
@@ -79,20 +78,20 @@ class PooledNetworkClient(NetworkClient):
         """
         Patch into connection creation in order to catch addr messages.
         """
-        self.open_connections |= Set([host])
+        self.open_connections |= set([host])
         c = NetworkClient.connect(self, host)
         c.handlers['addr'].append(self.on_addr_message)
         c.handlers['disconnect'].append(self.on_disconnect)
         return c
     
     def on_disconnect(self, connection, reason):
-        self.open_connections -= Set([connection.address])
+        self.open_connections -= set([connection.address])
         # TODO distinguish whether this is a failure or regular closure
         if not isinstance(reason, ConnectionLostException):
-            self.unreachable_peers |= Set([connection.address])
+            self.unreachable_peers |= set([connection.address])
     
     def on_addr_message(self, connection, message):
-        self.known_peers |= Set([(a.ip, a.port) for a in message.addresses])
+        self.known_peers |= set([(a.ip, a.port) for a in message.addresses])
         
     def pool_maintenance(self):
         spawn_later(5, self.pool_maintenance)
