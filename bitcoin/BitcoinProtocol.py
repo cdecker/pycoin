@@ -41,7 +41,7 @@ class BitcoinProtocolFactory(ClientFactory):
         self.best_height = 0
         
         # Get my external IP so I can announce it correctly hereon
-        self.external_ip = re.search("(\d+\.\d+\.\d+\.\d+)", urllib.urlopen("http://checkip.dyndns.com/").read()).groups(0)[0]
+        self.external_ip = get_external_ip()
         self.logger.debug("External IP: %s", self.external_ip)
         
         self.protocol = BitcoinClientProtocol
@@ -325,8 +325,8 @@ class BitcoinClientProtocol(Protocol):
 def dnsBootstrap():
     peers = []
     for seed in [
-        #"seed.bitcoin.sipa.be",
-        #"dnsseed.bluematt.me",
+        "seed.bitcoin.sipa.be",
+        "dnsseed.bluematt.me",
         "dnsseed.bitcoin.dashjr.org",
         "bitseed.xf2.org"
         ]:
@@ -337,3 +337,18 @@ def dnsBootstrap():
         except:
             pass
     return Set(peers)
+
+def get_external_ip():
+    return re.search("(\d+\.\d+\.\d+\.\d+)", urllib.urlopen("http://checkip.dyndns.com/").read()).groups(0)[0]
+
+def serialize_packet(packetType, payload, network_params):
+    if not isinstance(payload, str):
+        buf = BytesIO()
+        payload.toWire(buf)
+        payload = buf.getvalue()
+    message = network_params['magic']
+    message += packetType.ljust(12, chr(0))
+    message += struct.pack("<I", len(payload))
+    message += checksum(payload)
+    message += payload
+    return message
