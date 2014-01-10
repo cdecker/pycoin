@@ -16,11 +16,10 @@ import struct
 from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket,\
     VersionPacket, Address, AddrPacket
 from _pyio import BytesIO
-from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet
-from gevent.greenlet import Greenlet
+from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet, dnsBootstrap
 from gevent.pool import Group
-from sets import Set
 import random
+import gevent
 
 class ConnectionLostException(Exception):
     pass
@@ -39,72 +38,6 @@ parsers = {
            "addr": AddrPacket,
 }
 
-class NetworkClient():
-    """
-    Class that collects all the necessary meta information about this client. 
-    """
-    def __init__(self):
-        self.external_ip = get_external_ip()
-        self.port = 8333
-        self.connections = {}
-        self.connection_group = Group()
-    
-    def get_blockchain_height(self):
-        return 0
-    
-    def join(self):
-        self.connection_group.join()
-    
-    def connect(self, host):
-        c = Connection(host, self, False)
-        g = Greenlet.spawn(c.connect_and_run)
-        self.connection_group.add(g)
-        self.connections[host] = c
-        return c
-    
-    def remove_connection(self, connection):
-        self.connections.pop(connection.address, None)
-
-class PooledNetworkClient(NetworkClient):
-    def __init__(self, pool_size=500):
-        NetworkClient.__init__(self)
-        self.pool_size = pool_size
-        self.open_connections = Set()
-        self.unreachable_peers = Set()
-        self.known_peers = Set()
-        spawn_later(5, self.pool_maintenance)
-        # TODO implement
-        
-    def connect(self, host):
-        """
-        Patch into connection creation in order to catch addr messages.
-        """
-        self.open_connections |= Set([host])
-        c = NetworkClient.connect(self, host)
-        c.handlers['addr'].append(self.on_addr_message)
-        c.handlers['disconnect'].append(self.on_disconnect)
-        return c
-    
-    def on_disconnect(self, connection, reason):
-        self.open_connections -= Set([connection.address])
-        # TODO distinguish whether this is a failure or regular closure
-        if not isinstance(reason, ConnectionLostException):
-            self.unreachable_peers |= Set([connection.address])
-    
-    def on_addr_message(self, connection, message):
-        self.known_peers |= Set([(a.ip, a.port) for a in message.addresses])
-        
-    def pool_maintenance(self):
-        spawn_later(5, self.pool_maintenance)
-        print "Current connection pool: %d connections, %d known peers, %d marked as unreachable" % (len(self.open_connections), len(self.known_peers), len(self.unreachable_peers))
-        if len(self.open_connections) >= self.pool_size:
-            return
-        available_peers = self.known_peers - self.open_connections - self.unreachable_peers
-        if len(available_peers) < 1:
-            print "No more peers available for connection"
-        for c in random.sample(available_peers,min(len(available_peers), 20, self.pool_size - len(self.open_connections))):
-            self.connect(c)
-
 class Connection(object):
     
     def __init__(self, address, client, incoming=False, socket=None):
@@ -116,50 +49,49 @@ class Connection(object):
         self.bytes_in = 0
         self.version = None
         self.handlers = {
-                         "ping": [self.handle_ping],
-                         "inv": [self.print_inv],
+                         "ping": [],
+                         "inv": [],
                          "addr": [],
+                         "version": [self.on_version_message],
                          # Virtual events for connection and disconnection
                          "connect": [],
                          "disconnect": [],
-                         "version": [self.on_version_message]
                          }
-    
 
     def connect(self, timeout=5):
         self.socket = socket.create_connection(self.address,timeout=timeout)
+        self.connected = True
         for h in self.handlers.get("connect", []):
             h(self)
 
     def on_version_message(self, connection, version):
         self.version = version
         self._send("verack")
-        self.connected = True
 
-    def connect_and_run(self):
+    def connect_and_run(self, timeout=10):
         try:
-            self.connect()
+            self.connect(timeout)
             self.run()
         except Exception as e:
             self.terminate(e)
-    
+            raise e
+        
     def run(self):
+        #return
         if not self.socket:
             raise Exception("Not connected")
-        try:
-            if not self.incoming:
-                # We have to send a version message first
-                self.send_version()
+
+        if not self.incoming:
+            # We have to send a version message first
+            self.send_version()
         
-            while True:
-                command = self.read_command()
-                if command == None:
-                    continue
-                for h in self.handlers.get(command.type, []):
-                    h(self, command)
-        except Exception as e:
-            self.terminate(e)
-        
+        while self.connected:
+            command = self.read_command()
+            if command == None:
+                continue
+            for h in self.handlers.get(command.type, []):
+                h(self, command)
+
     def terminate(self, reason):
         self.connected = False
         if self.socket and not self.socket.closed:
@@ -211,3 +143,69 @@ class Connection(object):
         message = serialize_packet(packetType, payload, network_params)
         self.bytes_out += len(message)
         self.socket.send(message)
+
+class NetworkClient(object):
+    """
+    Class that collects all the necessary meta information about this client. 
+    """
+    protocol = Connection
+    
+    def __init__(self):
+        self.external_ip = get_external_ip()
+        self.port = 8333
+        self.connections = {}
+        self.connection_group = Group()
+
+    def connect(self, host):
+        c = self.protocol(host, self)
+        g = gevent.spawn(c.connect_and_run)
+        self.connection_group.add(g)
+        self.connections[host] = c
+        return c
+    
+    def join(self):
+        self.connection_group.join()
+    
+    def remove_connection(self, connection):
+        self.connections.pop(connection.address, None)
+
+class PooledNetworkClient(NetworkClient):
+    def __init__(self, pool_size=500):
+        NetworkClient.__init__(self)
+        self.pool_size = pool_size
+        self.open_connections = set()
+        self.unreachable_peers = set()
+        self.known_peers = set()
+        self.known_peers |= dnsBootstrap()
+        spawn_later(5, self.pool_maintenance)
+        # TODO implement
+        
+    def connect(self, host):
+        """
+        Patch into connection creation in order to catch addr messages.
+        """
+        self.open_connections |= set([host])
+        c = NetworkClient.connect(self, host)
+        c.handlers['addr'].append(self.on_addr_message)
+        c.handlers['disconnect'].append(self.on_disconnect)
+        return c
+    
+    def on_disconnect(self, connection, reason):
+        self.open_connections -= set([connection.address])
+        # TODO distinguish whether this is a failure or regular closure
+        if not isinstance(reason, ConnectionLostException):
+            self.unreachable_peers |= set([connection.address])
+    
+    def on_addr_message(self, connection, message):
+        self.known_peers |= set([(a.ip, a.port) for a in message.addresses])
+        
+    def pool_maintenance(self):
+        spawn_later(5, self.pool_maintenance)
+        print "Current connection pool: %d connections, %d known peers, %d marked as unreachable" % (len(self.open_connections), len(self.known_peers), len(self.unreachable_peers))
+        if len(self.open_connections) >= self.pool_size:
+            return
+        available_peers = self.known_peers - self.open_connections - self.unreachable_peers
+        if len(available_peers) < 1:
+            print "No more peers available for connection"
+        for c in random.sample(available_peers,min(len(available_peers), 20, self.pool_size - len(self.open_connections))):
+            self.connect(c)

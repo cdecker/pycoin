@@ -88,7 +88,6 @@ class BitcoinProtocolFactory(ClientFactory):
     def clientConnectionFailed(self, connector, reason):
         ClientFactory.clientConnectionFailed(self, connector, reason)
     
-from sets import Set
 from functools import partial
 import random, socket
 from twisted.internet.task import LoopingCall
@@ -101,9 +100,9 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
     def __init__(self, pool_size=100, port=8333, dns_bootstrap = True):
         BitcoinProtocolFactory.__init__(self, port=port)
         self.pool_size = pool_size
-        self.open_connections = Set()
-        self.unreachable_peers = Set()
-        self.known_peers = Set()
+        self.open_connections = set()
+        self.unreachable_peers = set()
+        self.known_peers = set()
 
         if dns_bootstrap:
             self.known_peers |= dnsBootstrap()
@@ -124,7 +123,7 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
         Open a new connection to a given (host, port)
         """
         self.logger.debug("Opening a new connection to %s", hostT)
-        self.open_connections |= Set([hostT])
+        self.open_connections |= set([hostT])
         reactor.connectTCP(hostT[0], hostT[1], self, timeout=300) #@UndefinedVariable
         
     def handleAddr(self, connection, addr):
@@ -133,7 +132,7 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
         temp = []
         for a in addr.addresses:
             temp.append((a.ip, a.port))
-        self.known_peers |= Set(temp)
+        self.known_peers |= set(temp)
     
     def handleVerack(self, connection, verack):
         connection._send("getaddr","")
@@ -150,12 +149,12 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
     
     def clientConnectionLost(self, connector, reason):
         BitcoinProtocolFactory.clientConnectionLost(self, connector, reason)
-        self.open_connections -= Set([(connector.host, connector.port)])
+        self.open_connections -= set([(connector.host, connector.port)])
         self.poolMaintenance()
     
     def clientConnectionFailed(self, connector, reason):
         BitcoinProtocolFactory.clientConnectionFailed(self, connector, reason)
-        connectionId = Set([(connector.host, connector.port)])
+        connectionId = set([(connector.host, connector.port)])
         self.open_connections -= connectionId
         self.unreachable_peers |= connectionId
         #self.poolMaintenance()
@@ -336,7 +335,7 @@ def dnsBootstrap():
                 peers.append((entry[4][0], 8333))
         except:
             pass
-    return Set(peers)
+    return set(peers)
 
 def get_external_ip():
     return re.search("(\d+\.\d+\.\d+\.\d+)", urllib.urlopen("http://checkip.dyndns.com/").read()).groups(0)[0]
