@@ -66,3 +66,7 @@ License
 This code is distributed under the [BSD 3-clause license](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22Revised_BSD_License.22.2C_.22New_BSD_License.22.2C_or_.22Modified_BSD_License.22.29).
 
 
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/cdecker/pycoin/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
