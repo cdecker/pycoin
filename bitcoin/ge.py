@@ -8,8 +8,9 @@ Created on Dec 15, 2013
 '''
 
 #from gevent.server import StreamServer
-from gevent import socket, spawn_later
+from gevent import socket, spawn_later, spawn
 import struct
+import time
 #from gevent.socket import create_connection
 #from gevent import socket as gsocket
 
@@ -52,21 +53,35 @@ class Connection(object):
                          "ping": [],
                          "inv": [],
                          "addr": [],
+                         "block": [],
+                         "tx": [],
                          "version": [self.on_version_message],
                          # Virtual events for connection and disconnection
                          "connect": [],
                          "disconnect": [],
                          }
-
+        
     def connect(self, timeout=5):
         self.socket = socket.create_connection(self.address,timeout=timeout)
+        self.socket.settimeout(None)
         self.connected = True
         for h in self.handlers.get("connect", []):
             h(self)
 
+    def send_ping(self):
+        if not self.connected:
+            return
+        gevent.spawn_later(30, self.send_ping)
+        self._send("ping", "12345678")
+        self.version.addr_recv.timestamp = time.time()
+        addr = AddrPacket()
+        addr.addresses = [self.version.addr_recv]
+        self._send("addr", addr)
+
     def on_version_message(self, connection, version):
         self.version = version
         self._send("verack")
+        self.send_ping()
 
     def connect_and_run(self, timeout=10):
         try:
@@ -74,23 +89,26 @@ class Connection(object):
             self.run()
         except Exception as e:
             self.terminate(e)
-            raise e
+            raise
         
     def run(self):
-        #return
-        if not self.socket:
-            raise Exception("Not connected")
+        try:
+            if not self.socket:
+                raise Exception("Not connected")
 
-        if not self.incoming:
-            # We have to send a version message first
-            self.send_version()
+            if not self.incoming:
+                # We have to send a version message first
+                self.send_version()
         
-        while self.connected:
-            command = self.read_command()
-            if command == None:
-                continue
-            for h in self.handlers.get(command.type, []):
-                h(self, command)
+            while self.connected:
+                command = self.read_command()
+                if command == None:
+                    continue
+                for h in self.handlers.get(command.type, []):
+                    h(self, command)
+        except Exception as e:
+            self.terminate(e)
+            raise
 
     def terminate(self, reason):
         self.connected = False
@@ -102,18 +120,24 @@ class Connection(object):
         
     def read_command(self):
         header = self.socket.recv(24)
-        if header < 24:
-            raise ConnectionLostException()
+
+        if len(header) < 24:
+            raise ConnectionLostException("Underread header on connection %s:%d %d bytes read" % (self.address[0], self.address[1], len(header)))
         
         # Drop the checksum for now
         magic, command, length, _ = struct.unpack("<4s12sII", header)
         if network_params['magic'] != magic:
             raise ConnectionLostException()
         
-        payload = self.socket.recv(length)
-        if len(payload) < length:
-            raise ConnectionLostException()
-        
+        # gevent does not like allocating arbitrary size buffers. We need to
+        # reassemble it here, otherwise large packets kill the connection.
+        payload = ""
+        while len(payload) < length:
+            b = self.socket.recv(length - len(payload))
+            if len(b) == 0:
+                raise ConnectionLostException("Underread payload: should be %d bytes, was %d" % (length, len(payload)))
+            payload += b 
+
         command = command.strip("\x00")
         if command not in parsers.keys():
             return None
@@ -130,10 +154,6 @@ class Connection(object):
         v.addr_recv = Address(self.address[0], True, self.address[1], 1)
         v.best_height = 0
         self._send("version", v)
-    
-    def print_inv(self, connection, packet):
-        #print [(h[0], h[1].encode("hex")) for h in packet.hashes]
-        pass
     
     def _send(self, packetType, payload=""):
         """
@@ -176,8 +196,7 @@ class PooledNetworkClient(NetworkClient):
         self.open_connections = set()
         self.unreachable_peers = set()
         self.known_peers = set()
-        self.known_peers |= dnsBootstrap()
-        spawn_later(5, self.pool_maintenance)
+        self.connection_group.add(spawn(self.pool_maintenance))
         # TODO implement
         
     def connect(self, host):
@@ -200,7 +219,19 @@ class PooledNetworkClient(NetworkClient):
         self.known_peers |= set([(a.ip, a.port) for a in message.addresses])
         
     def pool_maintenance(self):
-        spawn_later(5, self.pool_maintenance)
+        self.connection_group.add(spawn_later(10, self.pool_maintenance))
+        
+        # Select a random connection and ask the peer `getaddr`
+        try:
+            if len(self.connections) > 1:
+                c = random.choice(self.connections.values())
+                c._send("getaddr")
+        except:
+            pass
+        
+        if len(self.known_peers) == 0:
+            self.known_peers |= dnsBootstrap()
+        
         print "Current connection pool: %d connections, %d known peers, %d marked as unreachable" % (len(self.open_connections), len(self.known_peers), len(self.unreachable_peers))
         if len(self.open_connections) >= self.pool_size:
             return
