@@ -16,7 +16,7 @@ import time
 
 from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket,\
     VersionPacket, Address, AddrPacket
-from _pyio import BytesIO
+from io import BytesIO
 from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet, dnsBootstrap
 from gevent.pool import Group
 import random
