@@ -339,7 +339,7 @@ def dnsBootstrap():
     return set(peers)
 
 def get_external_ip():
-    return re.search("(\d+\.\d+\.\d+\.\d+)", urllib.urlopen("http://myexternalip.com/raw").read()).groups(0)[0]
+    return re.search("(\d+\.\d+\.\d+\.\d+)", urllib.urlopen("http://www.ipchicken.com/").read()).groups(0)[0]
 
 def serialize_packet(packetType, payload, network_params):
     if not isinstance(payload, str):
