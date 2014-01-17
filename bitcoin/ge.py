@@ -176,12 +176,15 @@ class NetworkClient(object):
         self.connections = {}
         self.connection_group = Group()
 
-    def connect(self, host):
+    def connect(self, host, greenlet=False, timeout=10):
         c = self.protocol(host, self)
-        g = gevent.spawn(c.connect_and_run)
+        g = gevent.spawn(c.connect_and_run, timeout=timeout)
         self.connection_group.add(g)
         self.connections[host] = c
-        return c
+        if not greenlet:
+            return c
+        else:
+            return c,g
     
     def join(self):
         self.connection_group.join()
