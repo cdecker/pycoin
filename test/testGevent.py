@@ -3,8 +3,9 @@ from cStringIO import StringIO
 
 from bitcoin.utils import encodeVarLength, decodeVarLength
 from _pyio import BytesIO
-#from mock import MagicMock, Mock
+from unittest import mock
 from bitcoin.ge import Connection, NetworkClient
+from bitcoin import messages
 
 version_message = "".join("""
         f9 be b4 d9 76 65 72 73 69 6f 6e 00 00 00 00 00
@@ -36,4 +37,21 @@ connection = nc.connect(("seed.bitcoin.sipa.be",8333))
         c.run()
         
         
-    """     
+    """
+
+class ConnectionTest(unittest.TestCase):
+
+    def testParserCall(self):
+        """Test the internal parsing and routing of messages."""
+        classes = [
+            messages.PingPacket,
+            messages.PingPacket,
+            messages.VersionPacket,
+            messages.AddrPacket,
+            messages.TxPacket,
+            messages.BlockPacket
+            ]
+
+        # Create a connection under test
+        network_client = mock.Mock(spec=NetworkClient)
+        c = Connection()

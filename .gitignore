@@ -5,4 +5,5 @@ build/
 dist/
 nose-1.3.0-py2.7.egg/
 pycoin.egg-info/
-
+.coverage
+htmlcov

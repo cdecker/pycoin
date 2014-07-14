@@ -1,17 +1,24 @@
-'''
+"""
 Created on Jul 13, 2012
 
 @author: cdecker
-'''
+"""
 from time import time
 import struct
 import socket
 from io import BytesIO
 
-from BitcoinProtocol import protocol_services, IPv4_prefix, protocol_user_agent, protocol_version
+from bitcoin.BitcoinProtocol import protocol_services, IPv4_prefix, protocol_user_agent, protocol_version
 from utils import decodeVarLength, decodeVarString, encodeVarLength, encodeVarString, doubleSha256
+from bitcoin import utils
+
+
+PROTOCOL_VERSION = 60001
+MIN_PROTOCOL_VERSION = 60001
+
 
 class Packet(object):
+    """Superclass of all packets that are sent/received by bitcoin."""
     type = None
 
     def parse(self, payload):
@@ -19,11 +26,13 @@ class Packet(object):
         This should be implemented by each packet in order to parse the
         contents of a message
         """
+
     def toWire(self, buf):
         """
         This should be implemented by the subclasses
         Writes the packet to the buffer
         """
+
 
 class Address(Packet):
     """
@@ -31,6 +40,7 @@ class Address(Packet):
     we just implement it as such.
     """
     type = None
+
     def __init__(self, ip = None, isIPv4 = True, port = 8333, services = protocol_services, timestamp = None):
         self.isIPv4 = isIPv4
         if ip:
@@ -65,9 +75,11 @@ class Address(Packet):
         else:
             buf.write(socket.inet_pton(socket.AF_INET6, self.ip))
         buf.write(struct.pack(">H", self.port))
-        
+
+
 class VersionPacket(Packet):
     type = "version"
+
     def __init__(self):
         self.timestamp = time()
         self.services = protocol_services
@@ -75,17 +87,24 @@ class VersionPacket(Packet):
         self.nonce = "__ETHZ__"
         self.user_agent = protocol_user_agent
         self.best_height = 0
+        self.relay = True
+        self.addr_from = None
+        self.addr_recv = None
         
-    def parse(self, payload):
+    def parse(self, payload, unused_version=None):
         Packet.parse(self, payload)
         self.version, self.services, self.timestamp = struct.unpack("<IQQ", payload.read(20))
-        self.addr_recv = Address()
-        self.addr_recv.parse(payload, False)
-        self.addr_from = Address()
-        self.addr_from.parse(payload, False)
-        self.nonce = payload.read(8)
-        self.user_agent = decodeVarString(payload)
-        self.best_height, = struct.unpack("<I", payload.read(4))
+        version = self.version
+        if version >= 106:
+            self.addr_recv = Address()
+            self.addr_recv.parse(payload, False)
+            self.addr_from = Address()
+            self.addr_from.parse(payload, False)
+            self.nonce = payload.read(8)
+            self.user_agent = decodeVarString(payload)
+            self.best_height, = struct.unpack("<I", payload.read(4))
+        if version >= 70001:
+            self.relay = payload.read(1) != 1
         
     def toWire(self, buf):
         Packet.toWire(self, buf)
@@ -113,11 +132,32 @@ class InvPacket(Packet):
         for h in self.hashes:
             buf.write(struct.pack("<I", h[0]))
             buf.write(h[1][::-1])
-            
+
+
 class GetDataPacket(InvPacket):
     def __init__(self):
         Packet.__init__(self, "getdata")
         self.hashes = []
+
+
+class PingPacket(Packet):
+    type = 'ping'
+
+    def __init__(self):
+        self.nonce = None
+
+    def parse(self, payload, version):
+        if payload:
+            self.nonce = payload
+
+    def toWire(self, buf):
+        if self.nonce:
+            buf.write(self.nonce)
+
+
+class PongPacket(PingPacket):
+    """Response to ping."""
+
 
 class TxPacket(Packet):
     type = "tx"
@@ -255,3 +295,14 @@ class AddrPacket(Packet):
         buf.write(encodeVarLength(len(self.addresses)))
         for a in self.addresses:
             a.toWire(buf)
+
+
+packet_types = {
+    AddrPacket.type: AddrPacket,
+    TxPacket.type: TxPacket,
+    PongPacket.type: PongPacket,
+    InvPacket.type: InvPacket,
+    GetDataPacket.type: GetDataPacket,
+    BlockPacket.type: BlockPacket,
+    VersionPacket.type: VersionPacket,
+}

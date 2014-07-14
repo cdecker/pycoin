@@ -1,26 +1,24 @@
-'''
+"""
 Rather simple wrapper around the Twisted callback version until we have time
 to migrate the BitcoinClientProtocol using gevent.
 
 Created on Dec 15, 2013
 
 @author: cdecker
-'''
+"""
 
-#from gevent.server import StreamServer
 from gevent import socket, spawn_later, spawn
 import struct
 import time
-#from gevent.socket import create_connection
-#from gevent import socket as gsocket
 
 from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket,\
-    VersionPacket, Address, AddrPacket
+    VersionPacket, Address, AddrPacket, PingPacket, PongPacket
 from io import BytesIO
 from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet, dnsBootstrap
 from gevent.pool import Group
 import random
 import gevent
+
 
 class ConnectionLostException(Exception):
     pass
@@ -31,13 +29,16 @@ network_params = {
 }
 
 parsers = {
-           "version": VersionPacket,
-           "inv": InvPacket,
-           "tx": TxPacket,
-           "block": BlockPacket,
-           "getdata": GetDataPacket,
-           "addr": AddrPacket,
+    "version": VersionPacket,
+    "inv": InvPacket,
+    "tx": TxPacket,
+    "block": BlockPacket,
+    "getdata": GetDataPacket,
+    "addr": AddrPacket,
+    "ping": PingPacket,
+    "pong": PongPacket,
 }
+
 
 class Connection(object):
     
@@ -50,16 +51,16 @@ class Connection(object):
         self.bytes_in = 0
         self.version = None
         self.handlers = {
-                         "ping": [],
-                         "inv": [],
-                         "addr": [],
-                         "block": [],
-                         "tx": [],
-                         "version": [self.on_version_message],
-                         # Virtual events for connection and disconnection
-                         "connect": [],
-                         "disconnect": [],
-                         }
+            "ping": [],
+            "inv": [],
+            "addr": [],
+            "block": [],
+            "tx": [],
+            "version": [self.on_version_message],
+            # Virtual events for connection and disconnection
+            "connect": [],
+            "disconnect": [],
+            }
         
     def connect(self, timeout=5):
         self.socket = socket.create_connection(self.address,timeout=timeout)
@@ -164,6 +165,7 @@ class Connection(object):
         self.bytes_out += len(message)
         self.socket.send(message)
 
+
 class NetworkClient(object):
     """
     Class that collects all the necessary meta information about this client. 
@@ -191,6 +193,7 @@ class NetworkClient(object):
     
     def remove_connection(self, connection):
         self.connections.pop(connection.address, None)
+
 
 class PooledNetworkClient(NetworkClient):
     def __init__(self, pool_size=500):
