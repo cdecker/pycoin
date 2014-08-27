@@ -59,7 +59,7 @@ class Test(unittest.TestCase):
             "FFFF0A000002208DDD9D202C3AB457130055810100").decode("hex")
         from bitcoin.BitcoinProtocol import VersionPacket
         p = VersionPacket()
-        p.parse(BytesIO(b))
+        p.parse(BytesIO(b), 70001)
         self.assertEquals(p.version, 31900, "Version")
         self.assertEquals(p.services, 1, "Services")
         self.assertEquals(p.timestamp, 1292899814)
@@ -67,7 +67,7 @@ class Test(unittest.TestCase):
         self.assertEqual(98645, p.best_height)
         
         buf = BytesIO()
-        p.toWire(buf)
+        p.toWire(buf, 70001)
         self.assertEquals(b.encode("hex"), buf.getvalue().encode("hex"), "Serialization")
     def testInvPacket(self):
         from bitcoin.BitcoinProtocol import InvPacket
@@ -76,17 +76,17 @@ class Test(unittest.TestCase):
              "c9af618c3ceda4e35eb20100000017e644fbcb3e92589ece8c42d88b2930c4d" + \
              "787d89e45415883ec61303bf88e42").decode("hex")
         i = InvPacket()
-        i.parse(BytesIO(b))
+        i.parse(BytesIO(b), 70001)
         
         buf = BytesIO()
-        i.toWire(buf)
+        i.toWire(buf, 70001)
         self.assertEquals(b.encode("hex"), buf.getvalue().encode("hex"))
         
     def testTxPacket(self):
         from bitcoin.BitcoinProtocol import TxPacket
         b = BytesIO(open("test/resources/tx-9c0f7b2.dmp").read())
         t = TxPacket()
-        t.parse(b)
+        t.parse(b, 70001)
         self.assertEquals(b.tell(), len(b.getvalue()))
         
         self.assertEquals(1, len(t.inputs))
@@ -94,14 +94,14 @@ class Test(unittest.TestCase):
         self.assertEquals(t.lock_time, 0)
         
         buf = BytesIO()
-        t.toWire(buf)
+        t.toWire(buf, 70001)
         self.assertEquals(b.getvalue().encode("hex"), buf.getvalue().encode("hex"))
         
     def testBlockPacket(self):
         from bitcoin.BitcoinProtocol import BlockPacket
         by = BytesIO(open("test/resources/block-188817.dmp").read())
         b = BlockPacket()
-        b.parse(by)
+        b.parse(by, 70001)
         
         self.assertEquals(1342158910, b.timestamp)
         self.assertEquals(1, b.version)
@@ -111,14 +111,14 @@ class Test(unittest.TestCase):
         self.assertEquals(88, len(b.transactions))
         
         buf = BytesIO()
-        b.toWire(buf)
-        self.assertEquals(len(by.getvalue()),len(buf.getvalue()))
+        b.toWire(buf, 70001)
+        self.assertEquals(len(by.getvalue()), len(buf.getvalue()))
         
     def testAddrPacket(self):
         from bitcoin.BitcoinProtocol import AddrPacket
         b = BytesIO("01E215104D010000000000000000000000000000000000FFFF0A000001208D".decode("hex"))
         a = AddrPacket()
-        a.parse(b)
+        a.parse(b, 70001)
         
         self.assertEqual(1, len(a.addresses))
         address = a.addresses[0]
@@ -130,5 +130,5 @@ class Test(unittest.TestCase):
         self.assertEquals(8333, address.port)
 
         buf = BytesIO()
-        a.toWire(buf)
+        a.toWire(buf, 70001)
         self.assertEquals(b.getvalue().encode("hex"), buf.getvalue().encode("hex"))
