@@ -140,7 +140,6 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
         pong = PongPacket()
         pong.nonce = ping.nonce
         connection._send("pong", pong)
-
     
     def handleVerack(self, connection, verack):
         connection._send("getaddr","")

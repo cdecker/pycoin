@@ -132,3 +132,4 @@ class Test(unittest.TestCase):
         buf = BytesIO()
         a.toWire(buf, 70001)
         self.assertEquals(b.getvalue().encode("hex"), buf.getvalue().encode("hex"))
+
