@@ -10,8 +10,9 @@ Created on Dec 15, 2013
 from gevent import socket, spawn_later, spawn
 import struct
 import time
-from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket, \
-    VersionPacket, Address, AddrPacket
+
+from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket,\
+    VersionPacket, Address, AddrPacket, PingPacket, PongPacket
 from io import BytesIO
 from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet, dnsBootstrap
 from gevent.pool import Group
@@ -36,6 +37,8 @@ parsers = {
     "block": BlockPacket,
     "getdata": GetDataPacket,
     "addr": AddrPacket,
+    "ping": PingPacket,
+    "pong": PongPacket,
 }
 
 
@@ -60,7 +63,7 @@ class Connection(object):
             # Virtual events for connection and disconnection
             "connect": [],
             "disconnect": [],
-        }
+            }
 
     def connect(self, timeout=5):
         self.socket = socket.create_connection(self.address, timeout=timeout)
@@ -167,6 +170,7 @@ class Connection(object):
         self.socket_lock.acquire()
         self.socket.send(message)
         self.socket_lock.release()
+
 
 
 class NetworkClient(object):

@@ -19,9 +19,10 @@ import re
 import logging
 from time import time
 
-from messages import BlockPacket, TxPacket, Address, VersionPacket, InvPacket, AddrPacket
+from messages import BlockPacket, TxPacket, Address, VersionPacket, InvPacket, AddrPacket, PingPacket, PongPacket
 from utils import checksum
 import struct
+
 
 class BitcoinProtocolFactory(ClientFactory):
     """
@@ -116,6 +117,7 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
         connection = BitcoinProtocolFactory.buildProtocol(self, addr)
         connection.handlers["verack"].append(partial(self.handleVerack, connection))
         connection.handlers["addr"].append(partial(self.handleAddr, connection))
+        connection.handlers["ping"].append(partial(self.handlePing, connection))
         return connection
         
     def connect(self, hostT):
@@ -133,6 +135,11 @@ class PooledBitcoinProtocolFactory(BitcoinProtocolFactory):
         for a in addr.addresses:
             temp.append((a.ip, a.port))
         self.known_peers |= set(temp)
+
+    def handlePing(self, connection, ping):
+        pong = PongPacket()
+        pong.nonce = ping.nonce
+        connection._send("pong", pong)
     
     def handleVerack(self, connection, verack):
         connection._send("getaddr","")
@@ -182,6 +189,8 @@ class BitcoinClientProtocol(Protocol):
                         "tx": self.parseTx,
                         "block": self.parseBlock,
                         "getdata": self.parseGetData,
+                        "ping": self.parsePing,
+                        "pong": self.parsePing,
                         }
         self.handlers = {
                          "version": [self.handleVersion],
@@ -279,6 +288,10 @@ class BitcoinClientProtocol(Protocol):
     def parsePacket(self, packetType, message):
         if packetType == "addr":
             res = AddrPacket()
+        elif packetType == "ping":
+            res = PingPacket()
+        elif packetType == "pong":
+            res = PongPacket()
         res.parse(message)
         return res
     
