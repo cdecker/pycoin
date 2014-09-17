@@ -357,7 +357,7 @@ def get_external_ip():
 def serialize_packet(packetType, payload, network_params):
     if not isinstance(payload, str):
         buf = BytesIO()
-        payload.toWire(buf)
+        payload.toWire(buf, 70001)
         payload = buf.getvalue()
     message = network_params['magic']
     message += packetType.ljust(12, chr(0))

@@ -93,8 +93,8 @@ class Connection(object):
             self.run()
         except Exception as e:
             self.terminate(e)
-            raise
-
+            #raise
+        
     def run(self):
         try:
             if not self.socket:
@@ -147,7 +147,7 @@ class Connection(object):
         if command not in parsers.keys():
             return None
         packet = parsers[command.strip()]()
-        packet.parse(BytesIO(payload))
+        packet.parse(BytesIO(payload), 70001)
         return packet
 
     def handle_ping(self):
