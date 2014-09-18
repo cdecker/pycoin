@@ -195,7 +195,7 @@ class GeventConnection(Connection):
             self.network_client.handle_message(
                 self, ConnectionEstablishedEvent()
             )
-        except socket.error, socket.timeout as e:
+        except socket.error as e:
             self.network_client.handle_message(self, ConnectionFailedEvent())
             del self.network_client.connections[self.host]
 

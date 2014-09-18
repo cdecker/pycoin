@@ -1,15 +1,15 @@
-'''
+"""
 Created on Jul 9, 2012
 
 @author: cdecker
-'''
+"""
 import unittest
 from cStringIO import StringIO
-
 from bitcoin.utils import encodeVarLength, decodeVarLength
 from _pyio import BytesIO
-class Test(unittest.TestCase):
 
+
+class Test(unittest.TestCase):
 
     def testVarLength(self):
         self.assertEqual("01", encodeVarLength(1).encode("hex"), "Simple 1 char number")

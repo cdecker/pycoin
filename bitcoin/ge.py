@@ -16,12 +16,14 @@ from bitcoin.messages import GetDataPacket, BlockPacket, TxPacket, InvPacket,\
 from io import BytesIO
 from bitcoin.BitcoinProtocol import get_external_ip, serialize_packet, dnsBootstrap
 from gevent.pool import Group
+from gevent.lock import RLock
 import random
 import gevent
 
 
 class ConnectionLostException(Exception):
     pass
+
 
 network_params = {
     "magic": "D9B4BEF9".decode("hex")[::-1],
@@ -41,15 +43,16 @@ parsers = {
 
 
 class Connection(object):
-    
-    def __init__(self, address, client, incoming=False, socket=None):
+    def __init__(self, address, client, incoming=False, sock=None):
         self.address = address
-        self.socket = socket
+        self.socket = sock
         self.incoming = incoming
         self.client = client
         self.bytes_out = 0
         self.bytes_in = 0
         self.version = None
+        self.connected = False
+        self.socket_lock = RLock()
         self.handlers = {
             "ping": [],
             "inv": [],
@@ -61,9 +64,9 @@ class Connection(object):
             "connect": [],
             "disconnect": [],
             }
-        
+
     def connect(self, timeout=5):
-        self.socket = socket.create_connection(self.address,timeout=timeout)
+        self.socket = socket.create_connection(self.address, timeout=timeout)
         self.socket.settimeout(None)
         self.connected = True
         for h in self.handlers.get("connect", []):
@@ -100,7 +103,7 @@ class Connection(object):
             if not self.incoming:
                 # We have to send a version message first
                 self.send_version()
-        
+
             while self.connected:
                 command = self.read_command()
                 if command == None:
@@ -117,19 +120,20 @@ class Connection(object):
             self.socket.close()
         for h in self.handlers.get("disconnect", []):
             h(self, reason)
-        self.client.remove_connection(self)        
-        
+        self.client.remove_connection(self)
+
     def read_command(self):
         header = self.socket.recv(24)
 
         if len(header) < 24:
-            raise ConnectionLostException("Underread header on connection %s:%d %d bytes read" % (self.address[0], self.address[1], len(header)))
-        
+            raise ConnectionLostException(
+                "Underread header on connection %s:%d %d bytes read" % (self.address[0], self.address[1], len(header)))
+
         # Drop the checksum for now
         magic, command, length, _ = struct.unpack("<4s12sII", header)
         if network_params['magic'] != magic:
             raise ConnectionLostException()
-        
+
         # gevent does not like allocating arbitrary size buffers. We need to
         # reassemble it here, otherwise large packets kill the connection.
         payload = ""
@@ -137,7 +141,7 @@ class Connection(object):
             b = self.socket.recv(length - len(payload))
             if len(b) == 0:
                 raise ConnectionLostException("Underread payload: should be %d bytes, was %d" % (length, len(payload)))
-            payload += b 
+            payload += b
 
         command = command.strip("\x00")
         if command not in parsers.keys():
@@ -145,17 +149,17 @@ class Connection(object):
         packet = parsers[command.strip()]()
         packet.parse(BytesIO(payload), 70001)
         return packet
-        
+
     def handle_ping(self):
         pass
-    
+
     def send_version(self):
         v = VersionPacket()
         v.addr_from = Address(self.client.external_ip, True, self.client.port, 1)
         v.addr_recv = Address(self.address[0], True, self.address[1], 1)
         v.best_height = 0
         self._send("version", v)
-    
+
     def _send(self, packetType, payload=""):
         """
         Utility method to calculate the checksum, the payload length and combine
@@ -163,7 +167,10 @@ class Connection(object):
         """
         message = serialize_packet(packetType, payload, network_params)
         self.bytes_out += len(message)
+        self.socket_lock.acquire()
         self.socket.send(message)
+        self.socket_lock.release()
+
 
 
 class NetworkClient(object):
@@ -171,7 +178,7 @@ class NetworkClient(object):
     Class that collects all the necessary meta information about this client. 
     """
     protocol = Connection
-    
+
     def __init__(self):
         self.external_ip = get_external_ip()
         self.port = 8333
@@ -186,11 +193,11 @@ class NetworkClient(object):
         if not greenlet:
             return c
         else:
-            return c,g
-    
+            return c, g
+
     def join(self):
         self.connection_group.join()
-    
+
     def remove_connection(self, connection):
         self.connections.pop(connection.address, None)
 
@@ -203,8 +210,7 @@ class PooledNetworkClient(NetworkClient):
         self.unreachable_peers = set()
         self.known_peers = set()
         self.connection_group.add(spawn(self.pool_maintenance))
-        # TODO implement
-        
+
     def connect(self, host):
         """
         Patch into connection creation in order to catch addr messages.
@@ -214,19 +220,19 @@ class PooledNetworkClient(NetworkClient):
         c.handlers['addr'].append(self.on_addr_message)
         c.handlers['disconnect'].append(self.on_disconnect)
         return c
-    
+
     def on_disconnect(self, connection, reason):
         self.open_connections -= set([connection.address])
         # TODO distinguish whether this is a failure or regular closure
         if not isinstance(reason, ConnectionLostException):
             self.unreachable_peers |= set([connection.address])
-    
+
     def on_addr_message(self, connection, message):
         self.known_peers |= set([(a.ip, a.port) for a in message.addresses])
-        
+
     def pool_maintenance(self):
         self.connection_group.add(spawn_later(10, self.pool_maintenance))
-        
+
         # Select a random connection and ask the peer `getaddr`
         try:
             if len(self.connections) > 1:
@@ -234,15 +240,17 @@ class PooledNetworkClient(NetworkClient):
                 c._send("getaddr")
         except:
             pass
-        
+
         if len(self.known_peers) == 0:
             self.known_peers |= dnsBootstrap()
-        
-        print "Current connection pool: %d connections, %d known peers, %d marked as unreachable" % (len(self.open_connections), len(self.known_peers), len(self.unreachable_peers))
+
+        print "Current connection pool: %d connections, %d known peers, %d marked as unreachable" % (
+            len(self.open_connections), len(self.known_peers), len(self.unreachable_peers))
         if len(self.open_connections) >= self.pool_size:
             return
         available_peers = self.known_peers - self.open_connections - self.unreachable_peers
         if len(available_peers) < 1:
             print "No more peers available for connection"
-        for c in random.sample(available_peers,min(len(available_peers), 20, self.pool_size - len(self.open_connections))):
+        for c in random.sample(available_peers,
+                               min(len(available_peers), 20, self.pool_size - len(self.open_connections))):
             self.connect(c)
