@@ -15,7 +15,7 @@ import logging
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
-VERSION = 70001
+VERSION = 60001
 SERVICES = 1
 USER_AGENT = "/Snoopy:0.1/"
 
