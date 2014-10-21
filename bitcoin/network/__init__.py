@@ -112,8 +112,8 @@ class NetworkClient(object):
         logging.debug('Connecting to %s:%d', host[0], host[1])
         with self.lock:
             if host in self.connections:
-                raise ValueError('Attempting to open a duplicate connection to '
-                                 '%s:%d' % (host[0], host[1]))
+                raise ValueError('Attempting to open a duplicate connection to'
+                                 ' %s:%d' % (host[0], host[1]))
             connection = self.connection_class(self, host, incoming=False)
             self.connections[host] = connection
             return connection
@@ -124,8 +124,8 @@ class NetworkClient(object):
         with self.lock:
             connection = self.connections.get(host)
             if not connection:
-                raise ValueError('Attempting to close a non-existent connection'
-                                 ' to %s:%d' % (host[0], host[1]))
+                raise ValueError('Attempting to close a non-existent '
+                                 'connection to %s:%d' % (host[0], host[1]))
             del self.connections[host]
         connection.disconnect()
 
@@ -165,10 +165,12 @@ class NetworkClient(object):
 class MessageHandler(object):
     """Behavioral unit that can be attached to a NetworkClient.
 
-    The aim of this class is to be a superclass for other classes that implement
-    some behavior. For example a PoolMaintainer will listen for incoming `addr`
-    messages, keep track of potential peers and react to connection and
-    disconnection events in order to maintain a given pool of open connections.
+    The aim of this class is to be a superclass for other classes that
+    implement some behavior. For example a PoolMaintainer will listen
+    for incoming `addr` messages, keep track of potential peers and
+    react to connection and disconnection events in order to maintain
+    a given pool of open connections.
+
     """
 
 
@@ -215,7 +217,8 @@ class GeventConnection(Connection):
             pass
         self.connected = False
         del self.network_client.connections[self.host]
-        logging.debug('Connection to %s:%d closed.', self.host[0], self.host[1])
+        logging.debug('Connection to %s:%d closed.',
+                      self.host[0], self.host[1])
         self.network_client.handle_message(self, ConnectionLostEvent())
 
     def send(self, message_type, payload=''):
@@ -261,7 +264,6 @@ class GeventConnection(Connection):
 
     def disconnect(self):
         self.connected = False
-        #self.socket.shutdown(socket.SHUT_RD)
         self.socket.close()
 
 
@@ -314,4 +316,3 @@ class ClientBehavior(object):
 
     def send_verack(self, connection, unused_message):
         connection.send('verack', '')
-
