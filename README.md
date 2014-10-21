@@ -38,32 +38,27 @@ additional argument. When receiving an `inv` message it loops through
 the hashes and prints their type and hash to stdout.
 
 ```python
-from bitcoin import PooledBitcoinProtocolFactory
-from functools import partial
-from twisted.internet import reactor
+from bitcoin import network
 
-class InvTracker(PooledBitcoinProtocolFactory):
-
-    def buildProtocol(self, addr):
-        connection = PooledBitcoinProtocolFactory.buildProtocol(self, addr)
-        connection.handlers['inv'].append(partial(self.on_inv_received, connection))
-        return connection
-
-    def on_inv_received(self, connection, inv):
-        for item in inv.hashes:
-            print connection.key, item[0], item[1].encode("hex")
+def on_inv_received(connection, inv):
+    for item in inv.hashes:
+        print connection.host, item[0], item[1].encode("hex")
 
 def start():
-    factory = InvTracker(1000)
-    desiredPort = 8333
-    reactor.listenTCP(desiredPort, factory) #@UndefinedVariable
-
-    print "Listening to port %d" % factory.port
-    reactor.run() #@UndefinedVariable
-
+    client = network.GeventNetworkClient()
+    client.register_handler('inv', on_inv_received)
+    network.ClientBehavior(client)
+    client.connect(('seed.bitcoinstats.com', 8333))
+    client.run_forever()
+    
 if __name__=="__main__":
     start()
 ```
+
+Changelog
+---------
+**v0.1**
+This release breaks some of the existing functionality and moves networking code into the `bitcoin.network` package. The twisted implementation is currenty broken since I concentrate mainly on gevent for my own clients.
 
 License
 -------
