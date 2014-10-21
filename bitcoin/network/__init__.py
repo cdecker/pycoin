@@ -8,6 +8,7 @@ from gevent import socket
 import hashlib
 
 __author__ = 'cdecker'
+__version__ = '0.1'
 
 from bitcoin.messages import parsers
 from bitcoin import messages
