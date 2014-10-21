@@ -8,6 +8,7 @@ from gevent import socket
 import hashlib
 
 __author__ = 'cdecker'
+__version__ = '0.1'
 
 from bitcoin.messages import parsers
 from bitcoin import messages
@@ -15,7 +16,7 @@ import logging
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
-VERSION = 70001
+VERSION = 60001
 SERVICES = 1
 USER_AGENT = "/Snoopy:0.1/"
 
@@ -195,7 +196,7 @@ class GeventConnection(Connection):
             self.network_client.handle_message(
                 self, ConnectionEstablishedEvent()
             )
-        except socket.error as e:
+        except socket.error:
             self.network_client.handle_message(self, ConnectionFailedEvent())
             del self.network_client.connections[self.host]
 
