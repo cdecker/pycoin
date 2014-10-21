@@ -37,5 +37,19 @@ class TestConnection(unittest.TestCase):
         self.assertRaises(NotImplementedError, c.disconnect)
 
 
+class TestMisc(unittest.TestCase):
+
+    def testDoubleSha256(self):
+        self.assertEqual(
+            network.doubleSha256('test').encode('hex'),
+            '954d5a49fd70d9b8bcdb35d252267829957f7ef7fa6c74f88419bdc5e82209f4'
+        )
+
+    def testChecksum(self):
+        self.assertEqual(
+            network.checksum('test').encode('hex'),
+            '954d5a49'
+        )
+
 if __name__ == '__main__':
     unittest.main()
