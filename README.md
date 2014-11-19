@@ -60,6 +60,9 @@ Changelog
 **v0.1**
 This release breaks some of the existing functionality and moves networking code into the `bitcoin.network` package. The twisted implementation is currenty broken since I concentrate mainly on gevent for my own clients.
 
+**v0.1.1**
+Added listening for incoming connection to GeventNetworkClient.
+
 License
 -------
 This code is distributed under the [BSD 3-clause license](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22Revised_BSD_License.22.2C_.22New_BSD_License.22.2C_or_.22Modified_BSD_License.22.29).
