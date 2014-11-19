@@ -211,8 +211,10 @@ class GeventConnection(Connection):
                 message = self.read_message()
                 if message:
                     self.network_client.handle_message(self, message)
-        except (socket.error, ValueError):
-            pass
+        except (socket.error, ValueError) as e:
+            logging.warn("Error while reading from socket %s:%d: %r",
+                         self.host[0], self.host[1], e)
+
         self.connected = False
         del self.network_client.connections[self.host]
         logging.debug('Connection to %s:%d closed.', self.host[0], self.host[1])
@@ -275,6 +277,7 @@ class GeventNetworkClient(NetworkClient):
         NetworkClient.__init__(self)
         self.shutdown_event = event.Event()
         self.connection_group = pool.Group()
+        self.socket = None
 
     def connect(self, host, timeout=10):
         connection = super(GeventNetworkClient, self).connect(host)
@@ -286,6 +289,31 @@ class GeventNetworkClient(NetworkClient):
     def run_forever(self):
         self.connection_group.join()
 
+    def listen(self, host='0.0.0.0', port=8333, backlog=5):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((host, port))
+        self.socket.listen(backlog)
+        self.connection_group.add(gevent.spawn(self.accept))
+        logging.debug("Socket bound to %s:%d", host, port)
+
+    def accept(self):
+        def disconnect_idle(host):
+            if host in self.connections and not self.connections[host].version:
+                logging.debug("Closing idle connection %s:%d", *host)
+                self.connections[host].disconnect()
+
+        while True:
+            conn, addr = self.socket.accept()
+            connection = GeventConnection(self, addr, incoming=True)
+            connection.connected = True
+            connection.socket = conn
+            self.connections[addr] = connection
+            self.handle_message(connection, ConnectionEstablishedEvent())
+            g = gevent.spawn(connection.run)
+            self.connection_group.add(g)
+            logging.debug("Accepted incoming connection from %s:%d", *addr)
+            gevent.spawn_later(30, disconnect_idle, addr)
+
 
 class ClientBehavior(object):
     def __init__(self, network_client):
@@ -293,7 +321,7 @@ class ClientBehavior(object):
             ConnectionEstablishedEvent.type, self.on_connect
         )
         network_client.register_handler(
-            messages.VersionPacket.type, self.send_verack
+            messages.VersionPacket.type, self.on_version
         )
 
     def on_connect(self, connection, unused_message):
@@ -301,6 +329,7 @@ class ClientBehavior(object):
             self.send_version(connection)
 
     def on_version(self, connection, unused_message):
+        self.send_verack(connection)
         if connection.incoming:
             self.send_version(connection)
 
@@ -312,6 +341,6 @@ class ClientBehavior(object):
         v.best_height = 0
         connection.send('version', v)
 
-    def send_verack(self, connection, unused_message):
+    def send_verack(self, connection):
         connection.send('verack', '')
 
