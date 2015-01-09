@@ -185,7 +185,7 @@ class GeventConnection(Connection):
     def __init__(self, network_client, host, incoming):
         Connection.__init__(self, network_client, host, incoming)
         self.socket = None
-        self.lock = threading.Lock()
+        self.lock = gevent.lock.RLock()
 
     def connect(self, timeout=10):
         try:
