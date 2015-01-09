@@ -278,6 +278,7 @@ class GeventNetworkClient(NetworkClient):
         self.shutdown_event = event.Event()
         self.connection_group = pool.Group()
         self.socket = None
+        self.lock = gevent.lock.RLock()
 
     def connect(self, host, timeout=10):
         connection = super(GeventNetworkClient, self).connect(host)
