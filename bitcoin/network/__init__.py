@@ -8,7 +8,7 @@ from gevent import socket
 import hashlib
 
 __author__ = 'cdecker'
-__version__ = '0.1'
+__version__ = '0.1.2'
 
 from bitcoin.messages import parsers
 from bitcoin import messages
@@ -186,7 +186,7 @@ class GeventConnection(Connection):
     def __init__(self, network_client, host, incoming):
         Connection.__init__(self, network_client, host, incoming)
         self.socket = None
-        self.lock = threading.Lock()
+        self.lock = gevent.lock.RLock()
 
     def connect(self, timeout=10):
         try:
@@ -278,6 +278,7 @@ class GeventNetworkClient(NetworkClient):
         self.shutdown_event = event.Event()
         self.connection_group = pool.Group()
         self.socket = None
+        self.lock = gevent.lock.RLock()
 
     def connect(self, host, timeout=10):
         connection = super(GeventNetworkClient, self).connect(host)
