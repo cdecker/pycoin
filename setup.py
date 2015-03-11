@@ -15,6 +15,6 @@ setup(
         "gevent"
     ],
     setup_requires=['nose>=1.0'],
-    test_suite='test',
+    test_suite='tests',
     tests_require=['mock'],
 )

@@ -84,7 +84,7 @@ class Test(unittest.TestCase):
         
     def testTxPacket(self):
         from bitcoin.BitcoinProtocol import TxPacket
-        b = BytesIO(open("test/resources/tx-9c0f7b2.dmp").read())
+        b = BytesIO(open("tests/resources/tx-9c0f7b2.dmp").read())
         t = TxPacket()
         t.parse(b, 70001)
         self.assertEquals(b.tell(), len(b.getvalue()))
@@ -99,7 +99,7 @@ class Test(unittest.TestCase):
         
     def testBlockPacket(self):
         from bitcoin.BitcoinProtocol import BlockPacket
-        by = BytesIO(open("test/resources/block-188817.dmp").read())
+        by = BytesIO(open("tests/resources/block-188817.dmp").read())
         b = BlockPacket()
         b.parse(by, 70001)
         

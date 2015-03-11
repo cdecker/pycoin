@@ -8,7 +8,7 @@ import struct
 import socket
 from io import BytesIO
 
-from bitcoin.BitcoinProtocol import protocol_services, IPv4_prefix, \
+from bitcoin.BitcoinProtocol import protocol_services, \
     protocol_user_agent, protocol_version
 from utils import decodeVarLength, decodeVarString, encodeVarLength, \
     encodeVarString, doubleSha256
@@ -16,6 +16,7 @@ from utils import decodeVarLength, decodeVarString, encodeVarLength, \
 
 PROTOCOL_VERSION = 60001
 MIN_PROTOCOL_VERSION = 60001
+IPV4_PREFIX = "00000000000000000000FFFF".decode("hex")
 
 
 class Packet(object):
@@ -59,7 +60,7 @@ class Address(Packet):
             self.timestamp, = struct.unpack_from("<I", payload.read(4))
         self.services, ip = struct.unpack_from("<Q16s", payload.read(24))
         (self.port,) = struct.unpack_from(">H", payload.read(2))
-        if ip[:12] == IPv4_prefix:
+        if ip[:12] == IPV4_PREFIX:
             self.isIPv4 = True
             self.ip = socket.inet_ntop(socket.AF_INET, ip[12:])
         else:
@@ -72,7 +73,7 @@ class Address(Packet):
             buf.write(struct.pack("<I", self.timestamp))
         buf.write(struct.pack("<Q", self.services))
         if self.isIPv4:
-            buf.write(IPv4_prefix)
+            buf.write(IPV4_PREFIX)
             buf.write(socket.inet_pton(socket.AF_INET, self.ip))
         else:
             buf.write(socket.inet_pton(socket.AF_INET6, self.ip))
@@ -92,7 +93,7 @@ class VersionPacket(Packet):
         self.relay = True
         self.addr_from = None
         self.addr_recv = None
-        
+
     def parse(self, payload, unused_version=None):
         Packet.parse(self, payload, unused_version)
         self.version, self.services, self.timestamp = struct.unpack(
@@ -108,7 +109,7 @@ class VersionPacket(Packet):
             self.best_height, = struct.unpack("<I", payload.read(4))
         if version >= 70001:
             self.relay = payload.read(1) != 1
-        
+
     def toWire(self, buf, unused_version):
         Packet.toWire(self, buf, unused_version)
         buf.write(struct.pack("<IQQ", self.version, self.services,
@@ -118,21 +119,21 @@ class VersionPacket(Packet):
         buf.write(self.nonce)
         buf.write(encodeVarString(self.user_agent))
         buf.write(struct.pack("<I", self.best_height))
-        
+
 
 class InvPacket(Packet):
     type = "inv"
 
     def __init__(self):
         self.hashes = []
-        
+
     def parse(self, payload, unused_version):
         length = decodeVarLength(payload)
         while len(self.hashes) < length:
             t, = struct.unpack("<I", payload.read(4))
             h = payload.read(32)[::-1]
             self.hashes.append((t, h))
-            
+
     def toWire(self, buf, unused_version):
         buf.write(encodeVarLength(len(self.hashes)))
         for h in self.hashes:
@@ -177,8 +178,11 @@ class TxPacket(Packet):
         
         self.version, = struct.unpack("<I", payload.read(4))
         txInputCount = decodeVarLength(payload)
-        for _i in range(0,txInputCount):
-            prev_out = (payload.read(32)[::-1], struct.unpack("<I", payload.read(4))[0])
+        for _i in range(0, txInputCount):
+            prev_out = (
+                payload.read(32)[::-1],
+                struct.unpack("<I", payload.read(4))[0]
+            )
             script_length = decodeVarLength(payload)
             script = payload.read(script_length)
             sequence, = struct.unpack("<I", payload.read(4))
@@ -196,7 +200,7 @@ class TxPacket(Packet):
         buf.write(struct.pack("<I", self.version))
         buf.write(encodeVarLength(len(self.inputs)))
         for i in self.inputs:
-            prev_out, script, sequence = i 
+            prev_out, script, sequence = i
             buf.write(prev_out[0][::-1])
             buf.write(struct.pack("<I", prev_out[1]))
             buf.write(encodeVarString(script))
@@ -209,10 +213,7 @@ class TxPacket(Packet):
             buf.write(encodeVarString(script))
             
         buf.write(struct.pack("<I", self.lock_time))
-        
-        
-        #buf.write(self.binrep)
-    
+
     def __len__(self):
         buf = BytesIO()
         self.toWire(buf, PROTOCOL_VERSION)
@@ -264,7 +265,13 @@ class BlockPacket(Packet):
         
     def toWire(self, buf, version):
         Packet.toWire(self, buf, version)
-        buf.write(struct.pack("<I32s32sIII", self.version, self.prev_block[::-1], self.merkle_root[::-1], self.timestamp, self.bits, self.nonce))
+        buf.write(struct.pack("<I32s32sIII",
+                              self.version,
+                              self.prev_block[::-1],
+                              self.merkle_root[::-1],
+                              self.timestamp,
+                              self.bits,
+                              self.nonce))
         buf.write(encodeVarLength(len(self.transactions)))
         for t in self.transactions:
             t.toWire(buf, version)

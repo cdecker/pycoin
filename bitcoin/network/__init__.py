@@ -1,18 +1,16 @@
+from bitcoin import messages
 from io import BytesIO
-import threading
-import struct
-import gevent
 from gevent import pool
 from gevent import event
 from gevent import socket
 import hashlib
+import logging
+import threading
+import struct
+import gevent
 
 __author__ = 'cdecker'
 __version__ = '0.1.2'
-
-from bitcoin.messages import parsers
-from bitcoin import messages
-import logging
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
@@ -69,7 +67,7 @@ class Connection:
         :param payload:
         :return:
         """
-        parser = parsers.get(msg_type)
+        parser = messages.parsers.get(msg_type)
         if not parser:
             logging.debug('No parser found for message of type %s', msg_type)
             return None
@@ -112,8 +110,10 @@ class NetworkClient(object):
         logging.debug('Connecting to %s:%d', host[0], host[1])
         with self.lock:
             if host in self.connections:
-                raise ValueError('Attempting to open a duplicate connection to '
-                                 '%s:%d' % (host[0], host[1]))
+                raise ValueError(
+                    'Attempting to open a duplicate connection to %s:%d' % (
+                        host[0], host[1])
+                )
             connection = self.connection_class(self, host, incoming=False)
             self.connections[host] = connection
             return connection
@@ -124,8 +124,8 @@ class NetworkClient(object):
         with self.lock:
             connection = self.connections.get(host)
             if not connection:
-                raise ValueError('Attempting to close a non-existent connection'
-                                 ' to %s:%d' % (host[0], host[1]))
+                raise ValueError('Attempting to close a non-existent '
+                                 'connection to %s:%d' % (host[0], host[1]))
             del self.connections[host]
         connection.disconnect()
 
@@ -263,7 +263,6 @@ class GeventConnection(Connection):
 
     def disconnect(self):
         self.connected = False
-        #self.socket.shutdown(socket.SHUT_RD)
         self.socket.close()
 
 
