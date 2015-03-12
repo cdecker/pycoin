@@ -1,9 +1,9 @@
 from bitcoin import messages
+from bitcoin.utils import checksum
 from io import BytesIO
 from gevent import pool
 from gevent import event
 from gevent import socket
-import hashlib
 import logging
 import threading
 import struct
@@ -19,12 +19,19 @@ SERVICES = 1
 USER_AGENT = "/Snoopy:0.1/"
 
 
-def checksum(payload):
-    return doubleSha256(payload)[:4]
+def bootstrap():
+    seeds = [
+        "seed.bitcoinstats.com",
+        "seed.bitcoin.sipa.be",
+        "dnsseed.bluematt.me",
+        "dnsseed.bitcoin.dashjr.org",
+        "bitseed.xf2.org"
+    ]
+    jobs = [gevent.spawn(socket.getaddrinfo, seed, None) for seed in seeds]
+    gevent.joinall(jobs, timeout=2)
 
-
-def doubleSha256(b):
-    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+    peers = [(v[4][0], 8333) for sublist in jobs for v in sublist.value]
+    return list(set(peers))
 
 
 class ConnectionEvent(messages.Packet):

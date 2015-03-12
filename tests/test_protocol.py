@@ -8,6 +8,7 @@ from bitcoin.utils import encodeVarLength, decodeVarLength
 from _pyio import BytesIO
 import os
 import unittest
+from bitcoin.messages import *
 
 
 BASENAME = os.path.dirname(__file__)
@@ -34,7 +35,6 @@ class Test(unittest.TestCase):
          00 00 00 00 00 00 00 00 00 00 FF FF 0A 00 00 01 - IPv6: ::ffff:10.0.0.1 or IPv4: 10.0.0.1
          20 8D
         """
-        from bitcoin.BitcoinProtocol import Address
         b = "010000000000000000000000000000000000FFFF0A000001208D".decode("hex")
         a = Address()
         a.parse(BytesIO(b), False)
@@ -61,7 +61,6 @@ class Test(unittest.TestCase):
         b = ("9C7C00000100000000000000E615104D00000000010000000000000000000000" + \
             "000000000000FFFF0A000001208D010000000000000000000000000000000000" + \
             "FFFF0A000002208DDD9D202C3AB457130055810100").decode("hex")
-        from bitcoin.BitcoinProtocol import VersionPacket
         p = VersionPacket()
         p.parse(BytesIO(b), 70001)
         self.assertEquals(p.version, 31900, "Version")
@@ -74,7 +73,6 @@ class Test(unittest.TestCase):
         p.toWire(buf, 70001)
         self.assertEquals(b.encode("hex"), buf.getvalue().encode("hex"), "Serialization")
     def testInvPacket(self):
-        from bitcoin.BitcoinProtocol import InvPacket
         b = ("030100000013789a2379fc190f292c9bc8087205a2dd4ee49f18cc5e9247ccc" + \
              "32525009550010000009c2c5169e550e49c118f9e57a06fd709e23b4f75cc2f" + \
              "c9af618c3ceda4e35eb20100000017e644fbcb3e92589ece8c42d88b2930c4d" + \
@@ -87,7 +85,6 @@ class Test(unittest.TestCase):
         self.assertEquals(b.encode("hex"), buf.getvalue().encode("hex"))
         
     def testTxPacket(self):
-        from bitcoin.BitcoinProtocol import TxPacket
         b = BytesIO(open(os.path.join(BASENAME, 'resources', "tx-9c0f7b2.dmp")).read())
         t = TxPacket()
         t.parse(b, 70001)
@@ -102,7 +99,6 @@ class Test(unittest.TestCase):
         self.assertEquals(b.getvalue().encode("hex"), buf.getvalue().encode("hex"))
         
     def testBlockPacket(self):
-        from bitcoin.BitcoinProtocol import BlockPacket
         by = BytesIO(open(os.path.join(BASENAME, 'resources', "block-188817.dmp")).read())
         b = BlockPacket()
         b.parse(by, 70001)
@@ -119,7 +115,6 @@ class Test(unittest.TestCase):
         self.assertEquals(len(by.getvalue()), len(buf.getvalue()))
         
     def testAddrPacket(self):
-        from bitcoin.BitcoinProtocol import AddrPacket
         b = BytesIO("01E215104D010000000000000000000000000000000000FFFF0A000001208D".decode("hex"))
         a = AddrPacket()
         a.parse(b, 70001)

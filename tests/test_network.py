@@ -37,5 +37,11 @@ class TestConnection(unittest.TestCase):
         self.assertRaises(NotImplementedError, c.disconnect)
 
 
+class TestUtil(unittest.TestCase):
+
+    def test_bootstrap(self):
+        res = network.bootstrap()
+        self.assertTrue(res)
+
 if __name__ == '__main__':
     unittest.main()

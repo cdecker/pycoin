@@ -1,4 +1,4 @@
-from bitcoin import network
+from bitcoin import utils
 
 
 import unittest
@@ -12,5 +12,5 @@ class UtilTest(unittest.TestCase):
         ]
 
         for d, h in data:
-            self.assertEquals(network.checksum(d).encode('hex'), h)
-            self.assertEquals(network.doubleSha256(d)[:4].encode('hex'), h)
+            self.assertEquals(utils.checksum(d).encode('hex'), h)
+            self.assertEquals(utils.doubleSha256(d)[:4].encode('hex'), h)

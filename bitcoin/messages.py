@@ -8,8 +8,6 @@ import struct
 import socket
 from io import BytesIO
 
-from bitcoin.BitcoinProtocol import protocol_services, \
-    protocol_user_agent, protocol_version
 from utils import decodeVarLength, decodeVarString, encodeVarLength, \
     encodeVarString, doubleSha256
 
@@ -17,6 +15,8 @@ from utils import decodeVarLength, decodeVarString, encodeVarLength, \
 PROTOCOL_VERSION = 60001
 MIN_PROTOCOL_VERSION = 60001
 IPV4_PREFIX = "00000000000000000000FFFF".decode("hex")
+USER_AGENT = "/Snoopy:0.1/"
+PROTOCOL_SERVICES = 1
 
 
 class Packet(object):
@@ -44,7 +44,7 @@ class Address(Packet):
     type = None
 
     def __init__(self, ip=None, isIPv4=True, port=8333,
-                 services=protocol_services, timestamp=None):
+                 services=PROTOCOL_SERVICES, timestamp=None):
         self.isIPv4 = isIPv4
         if ip:
             self.ip = socket.gethostbyname(ip)
@@ -53,7 +53,7 @@ class Address(Packet):
         self.timestamp = timestamp
         self.port = port
         self.services = services
-        
+
     def parse(self, payload, version):
         Packet.parse(self, payload, version)
         if version >= 31402:
@@ -66,7 +66,7 @@ class Address(Packet):
         else:
             self.isIPv4 = False
             self.ip = socket.inet_ntop(socket.AF_INET6, ip)
-        
+
     def toWire(self, buf, version):
         Packet.toWire(self, buf, version)
         if version >= 31402:
@@ -85,10 +85,10 @@ class VersionPacket(Packet):
 
     def __init__(self):
         self.timestamp = time()
-        self.services = protocol_services
-        self.version = protocol_version
+        self.services = PROTOCOL_SERVICES
+        self.version = PROTOCOL_VERSION
         self.nonce = "__ETHZ__"
-        self.user_agent = protocol_user_agent
+        self.user_agent = USER_AGENT
         self.best_height = 0
         self.relay = True
         self.addr_from = None
@@ -175,7 +175,7 @@ class TxPacket(Packet):
 
     def parse(self, payload, version):
         Packet.parse(self, payload, version)
-        
+
         self.version, = struct.unpack("<I", payload.read(4))
         txInputCount = decodeVarLength(payload)
         for _i in range(0, txInputCount):
@@ -187,14 +187,14 @@ class TxPacket(Packet):
             script = payload.read(script_length)
             sequence, = struct.unpack("<I", payload.read(4))
             self.inputs.append((prev_out, script, sequence))
-            
+
         txOutputCount = decodeVarLength(payload)
         for _i in range(0, txOutputCount):
             value, = struct.unpack("<Q", payload.read(8))
             script = decodeVarString(payload)
             self.outputs.append((value, script))
         self.lock_time, = struct.unpack("<I", payload.read(4))
-        
+
     def toWire(self, buf, version):
         Packet.toWire(self, buf, version)
         buf.write(struct.pack("<I", self.version))
@@ -205,20 +205,20 @@ class TxPacket(Packet):
             buf.write(struct.pack("<I", prev_out[1]))
             buf.write(encodeVarString(script))
             buf.write(struct.pack("<I", sequence))
-            
+
         buf.write(encodeVarLength(len(self.outputs)))
         for o in self.outputs:
             value, script = o
             buf.write(struct.pack("<Q", value))
             buf.write(encodeVarString(script))
-            
+
         buf.write(struct.pack("<I", self.lock_time))
 
     def __len__(self):
         buf = BytesIO()
         self.toWire(buf, PROTOCOL_VERSION)
         return len(buf.getvalue())
-    
+
     def hash(self):
         """
         If we have the hash saved from a parsing action we just return it
@@ -232,7 +232,7 @@ class TxPacket(Packet):
             buf = BytesIO()
             self.toWire(buf, PROTOCOL_VERSION)
             return doubleSha256(buf.getvalue())[::-1]
-        
+
 
 class BlockPacket(Packet):
     type = "block"
@@ -262,7 +262,7 @@ class BlockPacket(Packet):
             t.parse(payload, version)
             self.transactions.append(t)
         self._hash = doubleSha256(payload.getvalue()[:80])[::-1]
-        
+
     def toWire(self, buf, version):
         Packet.toWire(self, buf, version)
         buf.write(struct.pack("<I32s32sIII",
@@ -275,7 +275,7 @@ class BlockPacket(Packet):
         buf.write(encodeVarLength(len(self.transactions)))
         for t in self.transactions:
             t.toWire(buf, version)
-        
+
     def hash(self):
         """
         If we have the hash saved from a parsing action we just return it
@@ -296,14 +296,14 @@ class AddrPacket(Packet):
 
     def __init__(self):
         self.addresses = []
-    
+
     def parse(self, payload, version):
         l = decodeVarLength(payload)
         for _ in range(0, l):
             a = Address()
             a.parse(payload, version)
             self.addresses.append(a)
-            
+
     def toWire(self, buf, version):
         buf.write(encodeVarLength(len(self.addresses)))
         for a in self.addresses:
@@ -312,12 +312,6 @@ class AddrPacket(Packet):
 
 class VerackMessage(Packet):
     type = 'verack'
-
-    def parse(self, payload, version):
-        pass
-
-    def toWire(self, buf, version):
-        pass
 
 
 parsers = {
