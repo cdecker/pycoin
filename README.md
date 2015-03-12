@@ -14,7 +14,7 @@ have a nice idea for a project, we're always looking for fun stuff to
 implement.
 
 [![Build Status](https://travis-ci.org/cdecker/pycoin.png?branch=master)](https://travis-ci.org/cdecker/pycoin)
-[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/cdecker/pycoin/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+[![Coverage Status](https://coveralls.io/repos/cdecker/pycoin/badge.svg?branch=master)](https://coveralls.io/r/cdecker/pycoin?branch=master)
 
 
 Installation
