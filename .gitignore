@@ -8,3 +8,4 @@ pycoin.egg-info/
 .coverage
 htmlcov
 .cache
+.tox
