@@ -11,7 +11,6 @@ setup(
     description=('A minimalistic bitcoin protocol implementation'),
     long_description=open('README.md').read(),
     install_requires=[
-        "Twisted >= 13.1.0",
         "gevent"
     ],
     setup_requires=['nose>=1.0'],
