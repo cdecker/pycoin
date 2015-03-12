@@ -3,10 +3,14 @@ Created on Jul 9, 2012
 
 @author: cdecker
 """
-import unittest
 from cStringIO import StringIO
 from bitcoin.utils import encodeVarLength, decodeVarLength
 from _pyio import BytesIO
+import os
+import unittest
+
+
+BASENAME = os.path.dirname(__file__)
 
 
 class Test(unittest.TestCase):
@@ -84,7 +88,7 @@ class Test(unittest.TestCase):
         
     def testTxPacket(self):
         from bitcoin.BitcoinProtocol import TxPacket
-        b = BytesIO(open("tests/resources/tx-9c0f7b2.dmp").read())
+        b = BytesIO(open(os.path.join(BASENAME, 'resources', "tx-9c0f7b2.dmp")).read())
         t = TxPacket()
         t.parse(b, 70001)
         self.assertEquals(b.tell(), len(b.getvalue()))
@@ -99,7 +103,7 @@ class Test(unittest.TestCase):
         
     def testBlockPacket(self):
         from bitcoin.BitcoinProtocol import BlockPacket
-        by = BytesIO(open("tests/resources/block-188817.dmp").read())
+        by = BytesIO(open(os.path.join(BASENAME, 'resources', "block-188817.dmp")).read())
         b = BlockPacket()
         b.parse(by, 70001)
         
