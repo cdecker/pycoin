@@ -3,6 +3,7 @@ Created on Jul 13, 2012
 
 @author: cdecker
 '''
+import hashlib
 import struct
 
 
@@ -27,16 +28,19 @@ def decodeVarLength(i):
         l, = struct.unpack_from("<H", i.read(2))
     return l
 
+
 def decodeVarString(inp):
     length = decodeVarLength(inp)
     return inp.read(length)
 
+
 def encodeVarString(s):
     return encodeVarLength(len(s)) + s
 
-import hashlib
+
 def checksum(payload):
     return doubleSha256(payload)[:4]
+
 
 def doubleSha256(b):
     return hashlib.sha256(hashlib.sha256(b).digest()).digest()

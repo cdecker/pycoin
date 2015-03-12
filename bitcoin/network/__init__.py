@@ -172,10 +172,12 @@ class NetworkClient(object):
 class MessageHandler(object):
     """Behavioral unit that can be attached to a NetworkClient.
 
-    The aim of this class is to be a superclass for other classes that implement
-    some behavior. For example a PoolMaintainer will listen for incoming `addr`
-    messages, keep track of potential peers and react to connection and
-    disconnection events in order to maintain a given pool of open connections.
+    The aim of this class is to be a superclass for other classes that
+    implement some behavior. For example a PoolMaintainer will listen
+    for incoming `addr` messages, keep track of potential peers and
+    react to connection and disconnection events in order to maintain
+    a given pool of open connections.
+
     """
 
 
@@ -224,7 +226,9 @@ class GeventConnection(Connection):
 
         self.connected = False
         del self.network_client.connections[self.host]
-        logging.debug('Connection to %s:%d closed.', self.host[0], self.host[1])
+        logging.debug(
+            'Connection to %s:%d closed.', self.host[0], self.host[1]
+        )
         self.network_client.handle_message(self, ConnectionLostEvent())
 
     def send(self, message_type, payload=''):
@@ -350,4 +354,3 @@ class ClientBehavior(object):
 
     def send_verack(self, connection):
         connection.send('verack', '')
-
