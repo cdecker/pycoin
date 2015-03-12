@@ -1,10 +1,11 @@
-__author__ = 'cdecker'
-
 from bitcoin import network
 from bitcoin import messages
 from io import BytesIO
 import os
 import unittest
+
+
+__author__ = 'cdecker'
 
 
 BASENAME = os.path.dirname(__file__)
@@ -16,8 +17,10 @@ class TestNetworkClient(unittest.TestCase):
 
         Test to see whether we are selecting the correct parser.
         """
-        tx = BytesIO(open(os.path.join(BASENAME, 'resources', 'tx-9c0f7b2.dmp'),
-                          'r').read())
+        tx = BytesIO(open(
+            os.path.join(BASENAME, 'resources', 'tx-9c0f7b2.dmp'),
+            'r'
+        ).read())
         connection = network.Connection(None, ('host', 8333))
         message = connection.parse_message('tx', tx)
         self.assertEqual('tx', message.type)
