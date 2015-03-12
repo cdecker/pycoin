@@ -19,18 +19,22 @@ SERVICES = 1
 USER_AGENT = "/Snoopy:0.1/"
 
 
+DNS_SEEDS = [
+    "seed.bitcoinstats.com",
+    "seed.bitcoin.sipa.be",
+    "dnsseed.bluematt.me",
+    "dnsseed.bitcoin.dashjr.org",
+    "bitseed.xf2.org"
+]
+
+
 def bootstrap():
-    seeds = [
-        "seed.bitcoinstats.com",
-        "seed.bitcoin.sipa.be",
-        "dnsseed.bluematt.me",
-        "dnsseed.bitcoin.dashjr.org",
-        "bitseed.xf2.org"
-    ]
-    jobs = [gevent.spawn(socket.getaddrinfo, seed, None) for seed in seeds]
+    jobs = [gevent.spawn(socket.getaddrinfo, seed, None) for seed in DNS_SEEDS]
     gevent.joinall(jobs, timeout=2)
 
-    peers = [(v[4][0], 8333) for sublist in jobs for v in sublist.value]
+    # Filter out None results from failed lookups
+    results = [j.value for j in jobs if j.value]
+    peers = [(v[4][0], 8333) for sublist in results for v in sublist]
     return list(set(peers))
 
 
