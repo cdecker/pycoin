@@ -42,6 +42,25 @@ class TestConnection(unittest.TestCase):
         c = network.Connection(None, ('127.0.0.1', 8333))
         self.assertRaises(NotImplementedError, c.disconnect)
 
+    def testConnectDisconnect(self):
+        nc = network.NetworkClient()
+        nc.connection_class = mock.MagicMock()
+        conn = nc.connect(('1.2.3.4', 8333))
+        nc.connect(('1.2.3.4', 8334))
+        nc.connect(('1.2.3.5', 8333))
+        self.assertRaises(ValueError, nc.connect, ('1.2.3.4', 8333))
+        self.assertTrue(('1.2.3.4', 8333) in nc.connections)
+        self.assertEqual(len(nc.connections), 3)
+
+        self.assertFalse(conn.disconnect.called)
+        nc.disconnect(('1.2.3.4', 8333))
+        self.assertTrue(conn.disconnect.called)
+        self.assertTrue(('1.2.3.4', 8333) not in nc.connections)
+        self.assertEqual(len(nc.connections), 2)
+
+        self.assertRaises(ValueError, nc.disconnect, ('1.2.3.4', 8333))
+        self.assertEqual(len(nc.connections), 2)
+
     def test_roundtrip(self):
         """ Do a full roundtrip of the network stack.
 
