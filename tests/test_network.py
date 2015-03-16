@@ -3,6 +3,7 @@ from bitcoin import messages
 from io import BytesIO
 from mock import patch
 from gevent import socket
+import mock
 import os
 import unittest
 
@@ -41,6 +42,35 @@ class TestConnection(unittest.TestCase):
         c = network.Connection(None, ('127.0.0.1', 8333))
         self.assertRaises(NotImplementedError, c.disconnect)
 
+    def test_roundtrip(self):
+        """ Do a full roundtrip of the network stack.
+
+        Use Connection to serialize a message and GeventConnection to
+        deserialize it again.
+        """
+        connection = network.GeventConnection(mock.Mock(),
+                                              ('127.0.0.1', 8333),
+                                              False)
+        connection.socket = mock.Mock()
+        p = messages.GetDataPacket()
+        connection.send(p.type, p)
+        wire = BytesIO(connection.socket.send.call_args[0][0])
+
+        def recv(n):
+            return wire.read(n)
+
+        connection.socket.recv = recv
+        message = connection.read_message()
+        self.assertTrue(isinstance(message, messages.GetDataPacket))
+
+        # This should produce a short read
+        wire = BytesIO(connection.socket.send.call_args[0][0][:-2])
+        self.assertRaises(ValueError, connection.read_message)
+
+        # This will raise a non-matching magic error
+        wire = BytesIO("BEEF" + connection.socket.send.call_args[0][0][4:])
+        self.assertRaises(ValueError, connection.read_message)
+
 
 class TestUtil(unittest.TestCase):
 
@@ -59,6 +89,62 @@ class TestUtil(unittest.TestCase):
         getaddrinfo.side_effect = side_effect
         res = network.bootstrap()
         self.assertListEqual(res, [('68.48.214.241', 8333)])
+
+
+class TestBehvior(unittest.TestCase):
+
+    def setUp(self):
+        self.network_client = mock.Mock()
+        self.connection = mock.Mock(incoming=False, host=('127.0.0.1', 8333))
+
+    def test_client_behavior_init(self):
+        network.ClientBehavior(self.network_client)
+        args = self.network_client.register_handler.call_args_list
+        types = [a[0][0] for a in args]
+
+        # Ensure we have at least handlers for the connection established event
+        # and an incoming version message
+        self.assertTrue(network.ConnectionEstablishedEvent.type in types)
+        self.assertTrue(messages.VersionPacket.type in types)
+
+    def test_client_behavior_on_connect(self):
+        b = network.ClientBehavior(self.network_client)
+        message = mock.Mock(type=network.ConnectionEstablishedEvent.type)
+
+        # We should not send anything on new incoming connections
+        self.connection.incoming = True
+        b.on_connect(self.connection, message)
+        self.assertFalse(self.connection.send.called)
+
+        # On outgoing connections we initiate the handshake
+        self.connection.incoming = False
+        b.on_connect(self.connection, message)
+        self.assertTrue(self.connection.send.called)
+
+    def test_client_behavior_send_verack(self):
+        b = network.ClientBehavior(self.network_client)
+        b.send_verack(self.connection)
+        self.connection.send.assert_called_with('verack', '')
+        self.assertEquals(self.connection.send.call_count, 1)
+
+    def test_client_behavior_on_version(self):
+        b = network.ClientBehavior(self.network_client)
+        b.send_version = mock.Mock()
+        b.send_verack = mock.Mock()
+
+        # This is an outgoing connection, so we should send just one verack
+        self.connection.incoming = False
+        b.on_version(self.connection, mock.Mock())
+        self.assertFalse(b.send_version.called)
+        self.assertEquals(b.send_verack.call_count, 1)
+
+        # Now on an incoming connection, we also respond with a version
+        self.connection.incoming = True
+        b.send_verack.reset()
+        b.on_version(self.connection, mock.Mock())
+        self.assertTrue(b.send_verack.call_count, 1)
+        self.assertTrue(b.send_version.call_count, 1)
+
 
 if __name__ == '__main__':
     unittest.main()

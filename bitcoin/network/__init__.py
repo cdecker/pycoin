@@ -185,13 +185,6 @@ class MessageHandler(object):
     """
 
 
-class BaseBehavior(MessageHandler):
-
-    def handle_connect(self, connection, message):
-        if connection.incoming:
-            connection.send('version')
-
-
 class GeventConnection(Connection):
     """Connection implementation using gevent.
     """
@@ -344,9 +337,11 @@ class ClientBehavior(object):
             self.send_version(connection)
 
     def on_version(self, connection, unused_message):
-        self.send_verack(connection)
         if connection.incoming:
+            self.send_verack(connection)
             self.send_version(connection)
+        else:
+            self.send_verack(connection)
 
     def send_version(self, connection):
         v = messages.VersionPacket()
