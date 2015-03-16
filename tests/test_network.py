@@ -34,6 +34,10 @@ class TestNetworkClient(unittest.TestCase):
     def test_misc(self):
         nc = network.NetworkClient()
         self.assertRaises(NotImplementedError, nc.run_forever)
+        v = mock.Mock()
+        c = mock.Mock()
+        nc.handle_version(c, v)
+        self.assertEquals(v.version, c.version)
 
 
 class TestConnection(unittest.TestCase):
@@ -89,6 +93,80 @@ class TestConnection(unittest.TestCase):
         # This will raise a non-matching magic error
         wire = BytesIO("BEEF" + connection.socket.send.call_args[0][0][4:])
         self.assertRaises(ValueError, connection.read_message)
+
+
+class TestGeventNetworkClient(unittest.TestCase):
+
+    def test_init(self):
+        network.GeventNetworkClient()
+
+    @mock.patch('bitcoin.network.gevent')
+    def test_connect(self, mgevent):
+        nc = network.GeventNetworkClient()
+        conn = nc.connect(('10.0.0.1', 8333))
+        self.assertTrue(conn)
+        self.assertTrue(mgevent.spawn.called)
+
+    def test_run_forever(self):
+        nc = network.GeventNetworkClient()
+        nc.connection_group = mock.Mock()
+        nc.run_forever()
+        self.assertTrue(nc.connection_group.join.called)
+
+    @mock.patch('bitcoin.network.socket')
+    def test_listen(self, msocket):
+        nc = network.GeventNetworkClient()
+        group_size = len(nc.connection_group)
+
+        nc.listen()
+
+        self.assertTrue(nc.socket.bind.called)
+        self.assertTrue(nc.socket.listen.called)
+        self.assertEquals(len(nc.connection_group), group_size + 1)
+
+    def test_accept(self):
+        nc = network.GeventNetworkClient()
+
+        nc.socket = mock.Mock()
+        connection_handler = mock.Mock()
+        nc.register_handler(
+            network.ConnectionEstablishedEvent.type,
+            connection_handler
+        )
+        nc.socket.accept = mock.Mock(side_effect=[
+            (mock.Mock(), ('10.0.0.1', 8333)),
+            StopIteration()
+        ])
+        self.assertRaises(StopIteration, nc.accept)
+        self.assertTrue(connection_handler.called)
+
+    def test_accept_idle_timeout(self):
+        nc = network.GeventNetworkClient()
+
+        nc.socket = mock.Mock()
+        connection_handler = mock.Mock()
+        nc.register_handler(
+            network.ConnectionLostEvent.type,
+            connection_handler
+        )
+        nc.socket.accept = mock.Mock(side_effect=[
+            (mock.Mock(), ('10.0.0.1', 8333)),
+            StopIteration()
+        ])
+        nc.IDLE_TIMEOUT = 0.5
+
+        # Notice: this will spawn a greenlet that errors out immediately
+        #   as it tries to read from a Mock. We intend to observe the state of
+        #   the network client not the greenlet, so be careful about following
+        #   stack traces, you've been warned :-)
+        self.assertRaises(StopIteration, nc.accept)
+
+        self.assertEquals(len(nc.connections), 1)
+
+        # Yield so that the disconnect handler can be called
+        network.gevent.sleep(1)
+        self.assertEquals(len(nc.connections), 0)
+        self.assertTrue(connection_handler.called)
 
 
 class TestUtil(unittest.TestCase):

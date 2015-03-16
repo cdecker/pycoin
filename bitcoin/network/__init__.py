@@ -277,6 +277,7 @@ class GeventConnection(Connection):
 class GeventNetworkClient(NetworkClient):
     """Implementation using gevent.
     """
+    IDLE_TIMEOUT = 30
 
     connection_class = GeventConnection
 
@@ -308,11 +309,14 @@ class GeventNetworkClient(NetworkClient):
         def disconnect_idle(host):
             if host in self.connections and not self.connections[host].version:
                 logging.debug("Closing idle connection %s:%d", *host)
-                self.connections[host].disconnect()
+                connection = self.connections[host]
+                connection.disconnect()
+                del self.connections[host]
+                self.handle_message(connection, ConnectionLostEvent())
 
         while True:
             conn, addr = self.socket.accept()
-            connection = GeventConnection(self, addr, incoming=True)
+            connection = self.connection_class(self, addr, incoming=True)
             connection.connected = True
             connection.socket = conn
             self.connections[addr] = connection
@@ -320,7 +324,7 @@ class GeventNetworkClient(NetworkClient):
             g = gevent.spawn(connection.run)
             self.connection_group.add(g)
             logging.debug("Accepted incoming connection from %s:%d", *addr)
-            gevent.spawn_later(30, disconnect_idle, addr)
+            gevent.spawn_later(self.IDLE_TIMEOUT, disconnect_idle, addr)
 
 
 class ClientBehavior(object):

@@ -198,7 +198,9 @@ class Test(unittest.TestCase):
         )
 
     def test_length(self):
-        p = '01E215104D010000000000000000000000000000000000FFFF0A000001208D'.decode("hex")
+        p = (
+            '01E215104D010000000000000000000000000000000000FFFF0A000001208D'
+        ).decode("hex")
         b = BytesIO(p)
         a = messages.AddrPacket()
         a.parse(b, 70001)
