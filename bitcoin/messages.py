@@ -35,6 +35,11 @@ class Packet(object):
         Writes the packet to the buffer
         """
 
+    def __len__(self):
+        buf = BytesIO()
+        self.toWire(buf, PROTOCOL_VERSION)
+        return len(buf.getvalue())
+
 
 class Address(Packet):
     """
@@ -214,11 +219,6 @@ class TxPacket(Packet):
 
         buf.write(struct.pack("<I", self.lock_time))
 
-    def __len__(self):
-        buf = BytesIO()
-        self.toWire(buf, PROTOCOL_VERSION)
-        return len(buf.getvalue())
-
     def hash(self):
         """
         If we have the hash saved from a parsing action we just return it
@@ -226,12 +226,9 @@ class TxPacket(Packet):
         If the hash is derived from a serialization we do not cache the result
         should happen rarely though.
         """
-        if self._hash:
-            return self._hash
-        else:
-            buf = BytesIO()
-            self.toWire(buf, PROTOCOL_VERSION)
-            return doubleSha256(buf.getvalue())[::-1]
+        buf = BytesIO()
+        self.toWire(buf, PROTOCOL_VERSION)
+        return doubleSha256(buf.getvalue())[::-1]
 
 
 class BlockPacket(Packet):
@@ -287,7 +284,7 @@ class BlockPacket(Packet):
             return self._hash
         else:
             buf = BytesIO()
-            self.toWire(buf)
+            self.toWire(buf, PROTOCOL_VERSION)
             return doubleSha256(buf.getvalue()[:80])[::-1]
 
 

@@ -121,6 +121,18 @@ class Test(unittest.TestCase):
             buf.getvalue().encode("hex")
         )
 
+    def testTxHashing(self):
+        real_hash = ("9c0f7b2e9aac5c283f451915a04ec71a1da0e2215dbf9388990a7e99"
+                     "b7f3d3fd")
+        b = BytesIO(open(
+            os.path.join(BASENAME, 'resources', "tx-9c0f7b2.dmp")
+        ).read())
+        t = messages.TxPacket()
+        t.parse(b, 70001)
+
+        t._hash = None
+        self.assertEquals(t.hash().encode("hex"), real_hash)
+
     def testBlockPacket(self):
         by = BytesIO(open(
             os.path.join(BASENAME, 'resources', "block-188817.dmp")
@@ -141,6 +153,26 @@ class Test(unittest.TestCase):
         buf = BytesIO()
         b.toWire(buf, 70001)
         self.assertEquals(len(by.getvalue()), len(buf.getvalue()))
+
+    def testBlockHashing(self):
+        by = BytesIO(open(
+            os.path.join(BASENAME, 'resources', "block-188817.dmp")
+        ).read())
+        b = messages.BlockPacket()
+        b.parse(by, 70001)
+
+        # Try the cached hash from parsing first
+        self.assertEquals(
+            b.hash().encode("hex"),
+            "0000000000000295df119db2d63b6f2d6ea33196fae5f825cb4323e06d0c46f8"
+        )
+
+        # Unset cached hash and try again
+        b._hash = None
+        self.assertEquals(
+            b.hash().encode("hex"),
+            "0000000000000295df119db2d63b6f2d6ea33196fae5f825cb4323e06d0c46f8"
+        )
 
     def testAddrPacket(self):
         b = BytesIO((
@@ -164,3 +196,10 @@ class Test(unittest.TestCase):
             b.getvalue().encode("hex"),
             buf.getvalue().encode("hex")
         )
+
+    def test_length(self):
+        p = '01E215104D010000000000000000000000000000000000FFFF0A000001208D'.decode("hex")
+        b = BytesIO(p)
+        a = messages.AddrPacket()
+        a.parse(b, 70001)
+        self.assertEquals(len(p), len(a))
