@@ -124,7 +124,9 @@ class TestGeventNetworkClient(unittest.TestCase):
         self.assertTrue(nc.socket.listen.called)
         self.assertEquals(len(nc.connection_group), group_size + 1)
 
-    def test_accept(self):
+    @mock.patch('bitcoin.network.gevent.spawn_later')
+    @mock.patch('bitcoin.network.gevent.spawn')
+    def test_accept(self, mspawn, mspawn_later):
         nc = network.GeventNetworkClient()
 
         nc.socket = mock.Mock()
@@ -140,7 +142,9 @@ class TestGeventNetworkClient(unittest.TestCase):
         self.assertRaises(StopIteration, nc.accept)
         self.assertTrue(connection_handler.called)
 
-    def test_accept_idle_timeout(self):
+    @mock.patch('bitcoin.network.gevent.spawn_later')
+    @mock.patch('bitcoin.network.gevent.spawn')
+    def test_accept_idle_timeout(self, mspawn, mspawn_later):
         nc = network.GeventNetworkClient()
 
         nc.socket = mock.Mock()
@@ -153,18 +157,15 @@ class TestGeventNetworkClient(unittest.TestCase):
             (mock.Mock(), ('10.0.0.1', 8333)),
             StopIteration()
         ])
-        nc.IDLE_TIMEOUT = 0.5
 
-        # Notice: this will spawn a greenlet that errors out immediately
-        #   as it tries to read from a Mock. We intend to observe the state of
-        #   the network client not the greenlet, so be careful about following
-        #   stack traces, you've been warned :-)
+        def spawn_later(t, callable, *args, **kwargs):
+            callable(*args, **kwargs)
+
+        # Wire the idle timeout handler to be called immediately
+        mspawn_later.side_effect = spawn_later
+
         self.assertRaises(StopIteration, nc.accept)
 
-        self.assertEquals(len(nc.connections), 1)
-
-        # Yield so that the disconnect handler can be called
-        network.gevent.sleep(1)
         self.assertEquals(len(nc.connections), 0)
         self.assertTrue(connection_handler.called)
 
