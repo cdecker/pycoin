@@ -1,18 +1,16 @@
+from bitcoin import messages
+from bitcoin.utils import checksum
 from io import BytesIO
-import threading
-import struct
-import gevent
 from gevent import pool
 from gevent import event
 from gevent import socket
-import hashlib
+import logging
+import threading
+import struct
+import gevent
 
 __author__ = 'cdecker'
-__version__ = '0.1.2'
-
-from bitcoin.messages import parsers
-from bitcoin import messages
-import logging
+__version__ = '0.2'
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
@@ -21,12 +19,23 @@ SERVICES = 1
 USER_AGENT = "/Snoopy:0.1/"
 
 
-def checksum(payload):
-    return doubleSha256(payload)[:4]
+DNS_SEEDS = [
+    "seed.bitcoinstats.com",
+    "seed.bitcoin.sipa.be",
+    "dnsseed.bluematt.me",
+    "dnsseed.bitcoin.dashjr.org",
+    "bitseed.xf2.org"
+]
 
 
-def doubleSha256(b):
-    return hashlib.sha256(hashlib.sha256(b).digest()).digest()
+def bootstrap():
+    jobs = [gevent.spawn(socket.getaddrinfo, seed, None) for seed in DNS_SEEDS]
+    gevent.joinall(jobs, timeout=2)
+
+    # Filter out None results from failed lookups
+    results = [j.value for j in jobs if j.value]
+    peers = [(v[4][0], 8333) for sublist in results for v in sublist]
+    return list(set(peers))
 
 
 class ConnectionEvent(messages.Packet):
@@ -69,7 +78,7 @@ class Connection:
         :param payload:
         :return:
         """
-        parser = parsers.get(msg_type)
+        parser = messages.parsers.get(msg_type)
         if not parser:
             logging.debug('No parser found for message of type %s', msg_type)
             return None
@@ -112,8 +121,10 @@ class NetworkClient(object):
         logging.debug('Connecting to %s:%d', host[0], host[1])
         with self.lock:
             if host in self.connections:
-                raise ValueError('Attempting to open a duplicate connection to '
-                                 '%s:%d' % (host[0], host[1]))
+                raise ValueError(
+                    'Attempting to open a duplicate connection to %s:%d' % (
+                        host[0], host[1])
+                )
             connection = self.connection_class(self, host, incoming=False)
             self.connections[host] = connection
             return connection
@@ -124,8 +135,8 @@ class NetworkClient(object):
         with self.lock:
             connection = self.connections.get(host)
             if not connection:
-                raise ValueError('Attempting to close a non-existent connection'
-                                 ' to %s:%d' % (host[0], host[1]))
+                raise ValueError('Attempting to close a non-existent '
+                                 'connection to %s:%d' % (host[0], host[1]))
             del self.connections[host]
         connection.disconnect()
 
@@ -165,18 +176,13 @@ class NetworkClient(object):
 class MessageHandler(object):
     """Behavioral unit that can be attached to a NetworkClient.
 
-    The aim of this class is to be a superclass for other classes that implement
-    some behavior. For example a PoolMaintainer will listen for incoming `addr`
-    messages, keep track of potential peers and react to connection and
-    disconnection events in order to maintain a given pool of open connections.
+    The aim of this class is to be a superclass for other classes that
+    implement some behavior. For example a PoolMaintainer will listen
+    for incoming `addr` messages, keep track of potential peers and
+    react to connection and disconnection events in order to maintain
+    a given pool of open connections.
+
     """
-
-
-class BaseBehavior(MessageHandler):
-
-    def handle_connect(self, connection, message):
-        if connection.incoming:
-            connection.send('version')
 
 
 class GeventConnection(Connection):
@@ -217,7 +223,9 @@ class GeventConnection(Connection):
 
         self.connected = False
         del self.network_client.connections[self.host]
-        logging.debug('Connection to %s:%d closed.', self.host[0], self.host[1])
+        logging.debug(
+            'Connection to %s:%d closed.', self.host[0], self.host[1]
+        )
         self.network_client.handle_message(self, ConnectionLostEvent())
 
     def send(self, message_type, payload=''):
@@ -263,13 +271,13 @@ class GeventConnection(Connection):
 
     def disconnect(self):
         self.connected = False
-        #self.socket.shutdown(socket.SHUT_RD)
         self.socket.close()
 
 
 class GeventNetworkClient(NetworkClient):
     """Implementation using gevent.
     """
+    IDLE_TIMEOUT = 30
 
     connection_class = GeventConnection
 
@@ -301,11 +309,14 @@ class GeventNetworkClient(NetworkClient):
         def disconnect_idle(host):
             if host in self.connections and not self.connections[host].version:
                 logging.debug("Closing idle connection %s:%d", *host)
-                self.connections[host].disconnect()
+                connection = self.connections[host]
+                connection.disconnect()
+                del self.connections[host]
+                self.handle_message(connection, ConnectionLostEvent())
 
         while True:
             conn, addr = self.socket.accept()
-            connection = GeventConnection(self, addr, incoming=True)
+            connection = self.connection_class(self, addr, incoming=True)
             connection.connected = True
             connection.socket = conn
             self.connections[addr] = connection
@@ -313,7 +324,7 @@ class GeventNetworkClient(NetworkClient):
             g = gevent.spawn(connection.run)
             self.connection_group.add(g)
             logging.debug("Accepted incoming connection from %s:%d", *addr)
-            gevent.spawn_later(30, disconnect_idle, addr)
+            gevent.spawn_later(self.IDLE_TIMEOUT, disconnect_idle, addr)
 
 
 class ClientBehavior(object):
@@ -330,9 +341,11 @@ class ClientBehavior(object):
             self.send_version(connection)
 
     def on_version(self, connection, unused_message):
-        self.send_verack(connection)
         if connection.incoming:
+            self.send_verack(connection)
             self.send_version(connection)
+        else:
+            self.send_verack(connection)
 
     def send_version(self, connection):
         v = messages.VersionPacket()
@@ -344,4 +357,3 @@ class ClientBehavior(object):
 
     def send_verack(self, connection):
         connection.send('verack', '')
-
