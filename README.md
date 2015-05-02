@@ -63,6 +63,11 @@ This release breaks some of the existing functionality and moves networking code
 **v0.1.1**
 Added listening for incoming connection to GeventNetworkClient.
 
+**v0.2**
+ - Removed legacy twisted API
+ - Increased test coverage (py.test)
+ - Code is now PEP8 compliant
+
 License
 -------
 This code is distributed under the [BSD 3-clause license](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22Revised_BSD_License.22.2C_.22New_BSD_License.22.2C_or_.22Modified_BSD_License.22.29).
