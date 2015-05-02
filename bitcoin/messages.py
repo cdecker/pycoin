@@ -4,6 +4,7 @@ Created on Jul 13, 2012
 @author: cdecker
 """
 from time import time
+import six
 import struct
 import socket
 from io import BytesIO
@@ -36,7 +37,8 @@ class Packet(object):
         """
 
     def __len__(self):
-        buf = BytesIO()
+        buf = six.BytesIO()
+        print self.type
         self.toWire(buf, PROTOCOL_VERSION)
         return len(buf.getvalue())
 
