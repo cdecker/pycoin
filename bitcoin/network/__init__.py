@@ -30,7 +30,7 @@ DNS_SEEDS = [
 
 def bootstrap():
     jobs = [gevent.spawn(socket.getaddrinfo, seed, None) for seed in DNS_SEEDS]
-    gevent.joinall(jobs, timeout=2)
+    gevent.joinall(jobs, timeout=10)
 
     # Filter out None results from failed lookups
     results = [j.value for j in jobs if j.value]
