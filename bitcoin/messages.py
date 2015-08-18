@@ -4,18 +4,19 @@ Created on Jul 13, 2012
 @author: cdecker
 """
 from time import time
+import six
 import struct
 import socket
 from io import BytesIO
 
-from utils import decodeVarLength, decodeVarString, encodeVarLength, \
+from bitcoin.utils import decodeVarLength, decodeVarString, encodeVarLength, \
     encodeVarString, doubleSha256
 
 
 PROTOCOL_VERSION = 60001
 MIN_PROTOCOL_VERSION = 60001
 IPV4_PREFIX = "00000000000000000000FFFF".decode("hex")
-USER_AGENT = "/Snoopy:0.1/"
+USER_AGENT = "/Snoopy:0.2.1/"
 PROTOCOL_SERVICES = 1
 
 
@@ -36,7 +37,7 @@ class Packet(object):
         """
 
     def __len__(self):
-        buf = BytesIO()
+        buf = six.BytesIO()
         self.toWire(buf, PROTOCOL_VERSION)
         return len(buf.getvalue())
 
@@ -113,7 +114,8 @@ class VersionPacket(Packet):
             self.user_agent = decodeVarString(payload)
             self.best_height, = struct.unpack("<I", payload.read(4))
         if version >= 70001:
-            self.relay = payload.read(1) != 1
+            relay_flag, = struct.unpack('B', payload.read(1))
+            self.relay = bool(relay_flag & 1)
 
     def toWire(self, buf, unused_version):
         Packet.toWire(self, buf, unused_version)
@@ -177,6 +179,7 @@ class TxPacket(Packet):
         self.inputs = []
         self.outputs = []
         self.lock_time = 0
+        self.version = 1
 
     def parse(self, payload, version):
         Packet.parse(self, payload, version)
@@ -229,6 +232,27 @@ class TxPacket(Packet):
         buf = BytesIO()
         self.toWire(buf, PROTOCOL_VERSION)
         return doubleSha256(buf.getvalue())[::-1]
+
+    def is_coinbase(self):
+        return (len(self.inputs) == 1 and
+                self.inputs[0][0][0] == '\0'*32 and
+                self.inputs[0][0][1] == 4294967295)
+
+    def normalized_hash(self):
+        if self.is_coinbase():
+            return self.hash()
+        else:
+            copy = TxPacket()
+            buf = BytesIO()
+            self.toWire(buf, None)
+            copy.parse(BytesIO(buf.getvalue()), None)
+
+            for pos, iput in enumerate(copy.inputs):
+                copy.inputs[pos] = (iput[0], "", iput[2])
+            buf = BytesIO()
+            copy.toWire(buf, None)
+            buf.write(struct.pack('<I', 1))
+            return doubleSha256(buf.getvalue())[::-1]
 
 
 class BlockPacket(Packet):

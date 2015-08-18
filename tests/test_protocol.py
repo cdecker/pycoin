@@ -205,3 +205,57 @@ class Test(unittest.TestCase):
         a = messages.AddrPacket()
         a.parse(b, 70001)
         self.assertEquals(len(p), len(a))
+
+    def test_normalized_hash(self):
+        p = messages.TxPacket()
+        p.inputs.append([
+            ['12b5633bad1f9c167d523ad1aa1947b2732a865bf5414eab2f9e5ae5d5c191ba'.decode('hex'), 0],
+            ('473044022041d56d649e3ca8a06ffc10dbc6ba37cb958d1177cc8a155e83d064'
+             '6cd5852634022047fd6a02e26b00de9f60fb61326856e66d7a0d5e2bc9d01fb9'
+             '5f689fc705c04b01').decode('hex'),
+            4294967295
+        ])
+
+        p.outputs.append([
+            100000000,
+            ('4104fe1b9ccf732e1f6b760c5ed3152388eeeadd4a073e621f741eb157e6a62e'
+             '3547c8e939abbd6a513bf3a1fbe28f9ea85a4e64c526702435d726f7ff14da40'
+             'bae4ac').decode('hex')
+        ])
+        p.version = 1
+        p.lock_time = 0
+        self.assertEquals(
+            p.hash().encode('hex'),
+            '4385fcf8b14497d0659adccfe06ae7e38e0b5dc95ff8a13d7c62035994a0cd79'
+        )
+        self.assertEquals(
+            p.normalized_hash().encode('hex'),
+            '48b5b698c8646e0bc89381cc936a3cb859254607ef12974e1f4d728a12a5d416'
+        )
+
+        p2 = messages.TxPacket()
+        p2.version = 1
+        p2.inputs.append((
+            ('\0'*32, 4294967295),
+            ('04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368'
+             '616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c'
+             '6f757420666f722062616e6b73').decode('hex'),
+            4294967295
+        ))
+        p2.outputs.append((
+            5000000000,
+            ('4104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61'
+             'deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf1'
+             '1d5fac').decode('hex')
+        ))
+        p2.lock_time = 0
+
+        self.assertEquals(
+            p2.hash().encode('hex'),
+            '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b'
+        )
+
+        self.assertEquals(
+            p2.normalized_hash().encode('hex'),
+            p2.hash().encode('hex')
+        )
