@@ -114,7 +114,8 @@ class VersionPacket(Packet):
             self.user_agent = decodeVarString(payload)
             self.best_height, = struct.unpack("<I", payload.read(4))
         if version >= 70001:
-            self.relay = payload.read(1) != 1
+            relay_flag, = struct.unpack('B', payload.read(1))
+            self.relay = bool(relay_flag & 1)
 
     def toWire(self, buf, unused_version):
         Packet.toWire(self, buf, unused_version)
