@@ -16,7 +16,7 @@ from bitcoin.utils import decodeVarLength, decodeVarString, encodeVarLength, \
 PROTOCOL_VERSION = 60001
 MIN_PROTOCOL_VERSION = 60001
 IPV4_PREFIX = "00000000000000000000FFFF".decode("hex")
-USER_AGENT = "/Snoopy:0.1/"
+USER_AGENT = "/Snoopy:0.2.1/"
 PROTOCOL_SERVICES = 1
 
 

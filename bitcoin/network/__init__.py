@@ -10,7 +10,7 @@ import struct
 import gevent
 
 __author__ = 'cdecker'
-__version__ = '0.2'
+__version__ = '0.2.1'
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
