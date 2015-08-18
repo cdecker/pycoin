@@ -68,6 +68,12 @@ Added listening for incoming connection to GeventNetworkClient.
  - Increased test coverage (py.test)
  - Code is now PEP8 compliant
 
+**v0.2.1**
+Minor bugfix release.
+ - Added six dependency for compatibility
+ - Fixed parsing of relay flag in `version` message
+ - Bumped gevent dependency to allow support for python 3 in some distant future
+
 License
 -------
 This code is distributed under the [BSD 3-clause license](http://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_.28.22Revised_BSD_License.22.2C_.22New_BSD_License.22.2C_or_.22Modified_BSD_License.22.29).
