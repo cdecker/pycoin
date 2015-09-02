@@ -89,6 +89,24 @@ class Test(unittest.TestCase):
             buf.getvalue().encode("hex")
         )
 
+    def testBrokenVersionParsing(self):
+        v = messages.VersionPacket()
+        v.version = 70001
+        v.addr_from = messages.Address(ip='127.0.0.1')
+        v.addr_recv = messages.Address(ip='127.0.0.1')
+        v.relay = False
+        buf = BytesIO()
+        v.toWire(buf, 70001)
+
+        # Now cut off the relay byte
+        l = len(buf.getvalue())
+        buf = BytesIO(buf.getvalue()[:-1])
+        self.assertEquals(l-1, len(buf.getvalue()))
+        buf.seek(0)
+        v = messages.VersionPacket()
+        v.parse(buf, 70001)
+        self.assertTrue(v.relay)
+        
     def testInvPacket(self):
         b = (
             '030100000013789a2379fc190f292c9bc8087205a2dd4ee49f18cc5e9247ccc'

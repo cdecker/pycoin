@@ -114,8 +114,10 @@ class VersionPacket(Packet):
             self.user_agent = decodeVarString(payload)
             self.best_height, = struct.unpack("<I", payload.read(4))
         if version >= 70001:
-            relay_flag, = struct.unpack('B', payload.read(1))
-            self.relay = bool(relay_flag & 1)
+            relay_flag = payload.read(1)
+            # Some clients advertise 70001 but then do not include a relay_flag
+            if len(relay_flag):
+                self.relay = bool(struct.unpack('B', relay_flag)[0] & 1)
 
     def toWire(self, buf, unused_version):
         Packet.toWire(self, buf, unused_version)
