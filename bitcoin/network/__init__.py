@@ -1,6 +1,6 @@
 from bitcoin import messages
 from bitcoin.utils import checksum
-from io import BytesIO
+from six import BytesIO
 from gevent import pool
 from gevent import event
 from gevent import socket
@@ -14,9 +14,8 @@ __version__ = '0.2.1'
 
 
 MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
-VERSION = 60001
 SERVICES = 1
-USER_AGENT = "/Snoopy:0.1/"
+USER_AGENT = "/Snoopy:%s/" % __version__
 
 
 DNS_SEEDS = [
@@ -81,7 +80,10 @@ class Connection:
         parser = messages.parsers.get(msg_type)
         if not parser:
             logging.debug('No parser found for message of type %s', msg_type)
-            return None
+            packet = messages.DummyPacket()
+            packet.parse(payload, self.version)
+            packet.type = msg_type
+            return packet
         else:
             packet = parser()
             packet.parse(payload, self.version)
@@ -300,6 +302,7 @@ class GeventNetworkClient(NetworkClient):
 
     def listen(self, host='0.0.0.0', port=8333, backlog=5):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((host, port))
         self.socket.listen(backlog)
         self.connection_group.add(gevent.spawn(self.accept))
@@ -342,8 +345,8 @@ class ClientBehavior(object):
 
     def on_version(self, connection, unused_message):
         if connection.incoming:
-            self.send_verack(connection)
             self.send_version(connection)
+            self.send_verack(connection)
         else:
             self.send_verack(connection)
 
