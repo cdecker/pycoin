@@ -219,8 +219,11 @@ class GeventConnection(Connection):
                 message = self.read_message()
                 if message is not None:
                     self.network_client.handle_message(self, message)
-        except (socket.error, ValueError) as e:
+        except socket.error as e:
             logging.warn("Error while reading from socket %s:%d: %r",
+                         self.host[0], self.host[1], e)
+        except ValueError as e:
+            logging.debug("Error while reading from socket %s:%d: %r",
                          self.host[0], self.host[1], e)
 
         self.connected = False
