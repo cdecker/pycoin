@@ -29,7 +29,10 @@ class TestNetworkClient(unittest.TestCase):
         self.assertEqual('tx', message.type)
         self.assertIsInstance(message, messages.TxPacket)
 
-        self.assertFalse(connection.parse_message('unknown', ''))
+        self.assertIsInstance(
+            connection.parse_message('unknown', BytesIO()),
+            messages.DummyPacket
+        )
 
     def test_misc(self):
         nc = network.NetworkClient()
