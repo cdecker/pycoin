@@ -227,7 +227,8 @@ class GeventConnection(Connection):
                          self.host[0], self.host[1], e)
 
         self.connected = False
-        del self.network_client.connections[self.host]
+        if not self.network_client.connections.pop(self.host, None):
+            return
         logging.debug(
             'Connection to %s:%d closed.', self.host[0], self.host[1]
         )

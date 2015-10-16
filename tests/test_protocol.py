@@ -167,6 +167,10 @@ class Test(unittest.TestCase):
         self.assertEquals(436835377, b.bits)
         self.assertEquals(2064516359, b.nonce)
         self.assertEquals(88, len(b.transactions))
+        self.assertEquals(
+            '7d6be40468b8edb9080a14f1a63fd070d339a9ed1b01952256df5e5b108d74e3',
+            b.transactions[1].hash().encode('hex')
+        )
 
         buf = BytesIO()
         b.toWire(buf, 70001)
@@ -248,7 +252,7 @@ class Test(unittest.TestCase):
         )
         self.assertEquals(
             p.normalized_hash().encode('hex'),
-            '48b5b698c8646e0bc89381cc936a3cb859254607ef12974e1f4d728a12a5d416'
+            '27210b10dc211f2833011a8fc2386184174a434c2f207c2488ebe48f46c7f9aa'
         )
 
         p2 = messages.TxPacket()

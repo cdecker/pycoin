@@ -254,7 +254,7 @@ class TxPacket(Packet):
                 copy.inputs[pos] = (iput[0], "", iput[2])
             buf = BytesIO()
             copy.toWire(buf, None)
-            buf.write(struct.pack('<I', 1))
+            #buf.write(struct.pack('<I', 1))
             return doubleSha256(buf.getvalue())[::-1]
 
 
@@ -366,22 +366,32 @@ class DummyPacket(Packet):
     
 class FilterloadPacket(DummyPacket):
     type = 'filterload'
+    def __init__(self):
+        self.type = 'filterload'
 
 
 class FilteraddPacket(DummyPacket):
     type = 'filteradd'
+    def __init__(self):
+        self.type = 'filteradd'
 
 
 class FilterclearPacket(DummyPacket):
     type = 'filterclear'
+    def __init__(self):
+        self.type = 'filterclear'
 
 
 class MerkleblockPacket(DummyPacket):
     type = 'merkleblock'
+    def __init__(self):
+        self.type = 'merkleblock'
 
 
 class GetheadersPacket(DummyPacket):
     type = 'getheaders'
+    def __init__(self):
+        self.type = 'getheaders'
 
 
 parsers = {
