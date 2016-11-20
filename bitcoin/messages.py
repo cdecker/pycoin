@@ -20,6 +20,12 @@ USER_AGENT = "/Snoopy:0.2.1/"
 PROTOCOL_SERVICES = 9
 
 
+WITNESS_FLAG = 1 << 30
+INV_TX = 1
+INV_BLOCK = 2
+INV_WITNESS_TX = INV_TX | WITNESS_FLAG
+INV_WITNESS_BLOCK = INV_BLOCK | WITNESS_FLAG
+
 class Packet(object):
     """Superclass of all packets that are sent/received by bitcoin."""
     type = None
@@ -154,6 +160,10 @@ class InvPacket(Packet):
 class GetDataPacket(InvPacket):
     type = 'getdata'
 
+    def convertToWitness(self):
+        for i in xrange(len(self.hashes)):
+            h = self.hashes[i]
+            self.hashes[i] = (h[0] | WITNESS_FLAG, h[1])
 
 class PingPacket(Packet):
     type = 'ping'
@@ -183,12 +193,22 @@ class TxPacket(Packet):
         self.outputs = []
         self.lock_time = 0
         self.version = 1
+        self.witnesses = []
 
+    def parseSegwit(self, payload, version):
+        # TODO(cdecker) implement
+        print "Parsing segwit"
+        pass
+        
     def parse(self, payload, version):
         Packet.parse(self, payload, version)
 
         self.version, = struct.unpack("<I", payload.read(4))
         txInputCount = decodeVarLength(payload)
+
+        if txInputCount == 0:
+            return
+
         for _i in range(0, txInputCount):
             prev_out = (
                 payload.read(32)[::-1],
