@@ -1,6 +1,6 @@
 from bitcoin import messages
 from bitcoin.utils import checksum
-from io import BytesIO
+from six import BytesIO
 from gevent import pool
 from gevent import event
 from gevent import socket
@@ -13,11 +13,20 @@ __author__ = 'cdecker'
 __version__ = '0.2.1'
 
 
-MAGIC = 'D9B4BEF9'.decode("hex")[::-1]
-VERSION = 60001
 SERVICES = 1
-USER_AGENT = "/Snoopy:0.1/"
+USER_AGENT = "/Snoopy:%s/" % __version__
 
+mainnet_params = {
+    'magic': 'D9B4BEF9'.decode("hex")[::-1],
+    'port': 8333,
+}
+
+testnet_params = {
+    'magic': '0B110907'.decode("hex"),
+    'port': 18333,
+}
+
+params = mainnet_params
 
 DNS_SEEDS = [
     "seed.bitcoinstats.com",
@@ -26,6 +35,11 @@ DNS_SEEDS = [
     "dnsseed.bitcoin.dashjr.org",
     "bitseed.xf2.org"
 ]
+
+
+def configure(new_params):
+    global params
+    params = new_params
 
 
 def bootstrap():
@@ -63,6 +77,8 @@ class Connection:
         self.incoming = incoming
         self.host = host
         self.version = None
+        self.bytes_received = 0
+        self.bytes_sent = 0
 
     def disconnect(self):
         """Close the connection."""
@@ -81,7 +97,10 @@ class Connection:
         parser = messages.parsers.get(msg_type)
         if not parser:
             logging.debug('No parser found for message of type %s', msg_type)
-            return None
+            packet = messages.DummyPacket()
+            packet.parse(payload, self.version)
+            packet.type = msg_type
+            return packet
         else:
             packet = parser()
             packet.parse(payload, self.version)
@@ -92,7 +111,7 @@ class Connection:
             buf = BytesIO()
             payload.toWire(buf, self.version)
             payload = buf.getvalue()
-        message = MAGIC
+        message = params['magic']
         message += message_type.ljust(12, chr(0))
         message += struct.pack("<I", len(payload))
         message += checksum(payload)
@@ -111,6 +130,8 @@ class NetworkClient(object):
         self.connections = {}
         self.handlers = {}
         self.register_handler(messages.VersionPacket.type, self.handle_version)
+        self.bytes_received = 0
+        self.bytes_sent = 0
 
     def connect(self, host, timeout=10):
         """Open a connection to a peer.
@@ -167,6 +188,7 @@ class NetworkClient(object):
 
     def handle_version(self, connection, version):
         connection.version = version.version
+        connection.services = version.services
 
     def run_forever(self):
         """Start the reactor and start processing messages."""
@@ -217,8 +239,11 @@ class GeventConnection(Connection):
                 message = self.read_message()
                 if message is not None:
                     self.network_client.handle_message(self, message)
-        except (socket.error, ValueError) as e:
+        except socket.error as e:
             logging.warn("Error while reading from socket %s:%d: %r",
+                         self.host[0], self.host[1], e)
+        except ValueError as e:
+            logging.debug("Error while reading from socket %s:%d: %r",
                          self.host[0], self.host[1], e)
 
         self.connected = False
@@ -233,6 +258,8 @@ class GeventConnection(Connection):
         combine everything into a nice package.
         """
         message = self.serialize_message(message_type, payload)
+        self.bytes_sent += len(message)
+        self.network_client.bytes_sent += len(message)
         with self.lock:
             self.socket.send(message)
 
@@ -253,6 +280,8 @@ class GeventConnection(Connection):
             read_len += l
             payload.write(b)
         payload.seek(0)
+        self.bytes_received += read_len
+        self.network_client.bytes_received += read_len
         return payload
 
     def read_message(self):
@@ -260,7 +289,7 @@ class GeventConnection(Connection):
 
         magic, command, length, unused_checksum = struct.unpack(
             "<4s12sII", header.getvalue())
-        if MAGIC != magic:
+        if params['magic'] != magic:
             raise ValueError('Message separator magic did not match protocol '
                              '(%s)' % magic.encode('hex'))
         payload = self.read(length)
@@ -300,6 +329,7 @@ class GeventNetworkClient(NetworkClient):
 
     def listen(self, host='0.0.0.0', port=8333, backlog=5):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.socket.bind((host, port))
         self.socket.listen(backlog)
         self.connection_group.add(gevent.spawn(self.accept))
@@ -342,8 +372,8 @@ class ClientBehavior(object):
 
     def on_version(self, connection, unused_message):
         if connection.incoming:
-            self.send_verack(connection)
             self.send_version(connection)
+            self.send_verack(connection)
         else:
             self.send_verack(connection)
 

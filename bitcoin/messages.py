@@ -13,11 +13,11 @@ from bitcoin.utils import decodeVarLength, decodeVarString, encodeVarLength, \
     encodeVarString, doubleSha256
 
 
-PROTOCOL_VERSION = 60001
+PROTOCOL_VERSION = 70001
 MIN_PROTOCOL_VERSION = 60001
 IPV4_PREFIX = "00000000000000000000FFFF".decode("hex")
 USER_AGENT = "/Snoopy:0.2.1/"
-PROTOCOL_SERVICES = 1
+PROTOCOL_SERVICES = 9
 
 
 class Packet(object):
@@ -114,8 +114,10 @@ class VersionPacket(Packet):
             self.user_agent = decodeVarString(payload)
             self.best_height, = struct.unpack("<I", payload.read(4))
         if version >= 70001:
-            relay_flag, = struct.unpack('B', payload.read(1))
-            self.relay = bool(relay_flag & 1)
+            relay_flag = payload.read(1)
+            # Some clients advertise 70001 but then do not include a relay_flag
+            if len(relay_flag):
+                self.relay = bool(struct.unpack('B', relay_flag)[0] & 1)
 
     def toWire(self, buf, unused_version):
         Packet.toWire(self, buf, unused_version)
@@ -126,7 +128,8 @@ class VersionPacket(Packet):
         buf.write(self.nonce)
         buf.write(encodeVarString(self.user_agent))
         buf.write(struct.pack("<I", self.best_height))
-
+        if self.version >= 70001:
+            buf.write(struct.pack('B', 1 if self.relay else 0))
 
 class InvPacket(Packet):
     type = "inv"
@@ -169,7 +172,7 @@ class PingPacket(Packet):
 
 class PongPacket(PingPacket):
     """Response to ping."""
-
+    type = 'pong'
 
 class TxPacket(Packet):
     type = "tx"
@@ -311,6 +314,9 @@ class BlockPacket(Packet):
             self.toWire(buf, PROTOCOL_VERSION)
             return doubleSha256(buf.getvalue()[:80])[::-1]
 
+class GetaddrPacket(Packet):
+    type = 'getaddr'
+
 
 class AddrPacket(Packet):
     type = "addr"
@@ -335,13 +341,63 @@ class VerackMessage(Packet):
     type = 'verack'
 
 
+class DummyPacket(Packet):
+    """ Class of packets that are not really parsed.
+
+    This is just until we implement the actual parsing. It reads/writes the
+    packet's binary representation.
+
+    If you need to parse a subclass of DummyPacket, i.e., the packets below
+    feel free to implement and send us a pull request :-)
+    """
+    def __init__(self):
+        self.type = None
+        self.binrep = ""
+
+    def parse(self, payload, version):
+        self.binrep = payload.getvalue()
+
+    def toWire(self, buf, version):
+        buf.write(self.binrep)
+
+    def __str__(self):
+        return "<DummyPacket[%s]>" % (self.type)
+
+    
+class FilterloadPacket(DummyPacket):
+    type = 'filterload'
+
+
+class FilteraddPacket(DummyPacket):
+    type = 'filteradd'
+
+
+class FilterclearPacket(DummyPacket):
+    type = 'filterclear'
+
+
+class MerkleblockPacket(DummyPacket):
+    type = 'merkleblock'
+
+
+class GetheadersPacket(DummyPacket):
+    type = 'getheaders'
+
+
 parsers = {
     AddrPacket.type: AddrPacket,
     TxPacket.type: TxPacket,
     PongPacket.type: PongPacket,
+    PingPacket.type: PingPacket,
     InvPacket.type: InvPacket,
     GetDataPacket.type: GetDataPacket,
     BlockPacket.type: BlockPacket,
     VersionPacket.type: VersionPacket,
     VerackMessage.type: VerackMessage,
+    FilterloadPacket.type: FilterloadPacket,
+    FilteraddPacket.type: FilteraddPacket,
+    FilterclearPacket.type: FilterclearPacket,
+    MerkleblockPacket.type: MerkleblockPacket,
+    GetheadersPacket.type: GetheadersPacket,
+    GetaddrPacket.type: GetaddrPacket,
 }
