@@ -79,6 +79,7 @@ class Connection:
         self.version = None
         self.bytes_received = 0
         self.bytes_sent = 0
+        self.is_segwit = False
 
     def disconnect(self):
         """Close the connection."""
@@ -95,15 +96,16 @@ class Connection:
         :return:
         """
         parser = messages.parsers.get(msg_type)
+        opts = {'version': self.version, 'segwit': self.is_segwit}
         if not parser:
             logging.debug('No parser found for message of type %s', msg_type)
             packet = messages.DummyPacket()
-            packet.parse(payload, self.version)
+            packet.parse(payload, opts)
             packet.type = msg_type
             return packet
         else:
             packet = parser()
-            packet.parse(payload, self.version)
+            packet.parse(payload, opts)
             return packet
 
     def serialize_message(self, message_type, payload):
@@ -189,6 +191,7 @@ class NetworkClient(object):
     def handle_version(self, connection, version):
         connection.version = version.version
         connection.services = version.services
+        connection.is_segwit = version.is_segwit()
 
     def run_forever(self):
         """Start the reactor and start processing messages."""

@@ -25,18 +25,25 @@ INV_TX = 1
 INV_BLOCK = 2
 INV_WITNESS_TX = INV_TX | WITNESS_FLAG
 INV_WITNESS_BLOCK = INV_BLOCK | WITNESS_FLAG
+NODE_WITNESS = (1 << 3)
+
+def get_opt(opts, key, default):
+    if opts is None or key not in opts:
+        return default
+    else:
+        return opts[key]
 
 class Packet(object):
     """Superclass of all packets that are sent/received by bitcoin."""
     type = None
 
-    def parse(self, payload, version):
+    def parse(self, payload, opts):
         """
         This should be implemented by each packet in order to parse the
         contents of a message
         """
 
-    def toWire(self, buf, version):
+    def toWire(self, buf, opts):
         """
         This should be implemented by the subclasses
         Writes the packet to the buffer
@@ -44,7 +51,7 @@ class Packet(object):
 
     def __len__(self):
         buf = six.BytesIO()
-        self.toWire(buf, PROTOCOL_VERSION)
+        self.toWire(buf, None)
         return len(buf.getvalue())
 
 
@@ -66,12 +73,12 @@ class Address(Packet):
         self.port = port
         self.services = services
 
-    def parse(self, payload, version):
-        Packet.parse(self, payload, version)
-        if version >= 31402:
+    def parse(self, payload, opts):
+        Packet.parse(self, payload, opts)
+        if get_opt(opts, 'version', PROTOCOL_VERSION) >= 31402:
             self.timestamp, = struct.unpack_from("<I", payload.read(4))
-        self.services, ip = struct.unpack_from("<Q16s", payload.read(24))
-        (self.port,) = struct.unpack_from(">H", payload.read(2))
+        self.services, ip, = struct.unpack_from("<Q16s", payload.read(24))
+        self.port, = struct.unpack_from(">H", payload.read(2))
         if ip[:12] == IPV4_PREFIX:
             self.isIPv4 = True
             self.ip = socket.inet_ntop(socket.AF_INET, ip[12:])
@@ -79,10 +86,10 @@ class Address(Packet):
             self.isIPv4 = False
             self.ip = socket.inet_ntop(socket.AF_INET6, ip)
 
-    def toWire(self, buf, version):
-        Packet.toWire(self, buf, version)
-        if version >= 31402:
-            buf.write(struct.pack("<I", self.timestamp))
+    def toWire(self, buf, opts):
+        Packet.toWire(self, buf, opts)
+        if get_opt(opts, 'version', 70001) >= 31402:
+            buf.write(struct.pack("<i", int(self.timestamp)))
         buf.write(struct.pack("<Q", self.services))
         if self.isIPv4:
             buf.write(IPV4_PREFIX)
@@ -106,31 +113,35 @@ class VersionPacket(Packet):
         self.addr_from = None
         self.addr_recv = None
 
-    def parse(self, payload, unused_version=None):
-        Packet.parse(self, payload, unused_version)
+    def is_segwit(self):
+        return self.services & NODE_WITNESS != 0
+
+    def parse(self, payload, opts=None):
+        Packet.parse(self, payload, opts)
         self.version, self.services, self.timestamp = struct.unpack(
             "<IQQ", payload.read(20))
-        version = self.version
-        if version >= 106:
+
+        if self.version >= 106:
+            # Pretend to be version 0, this doesn't include timestamps yet.
             self.addr_recv = Address()
-            self.addr_recv.parse(payload, False)
+            self.addr_recv.parse(payload, {'version': 0})
             self.addr_from = Address()
-            self.addr_from.parse(payload, False)
+            self.addr_from.parse(payload, {'version': 0})
             self.nonce = payload.read(8)
             self.user_agent = decodeVarString(payload)
             self.best_height, = struct.unpack("<I", payload.read(4))
-        if version >= 70001:
+        if self.version >= 70001:
             relay_flag = payload.read(1)
             # Some clients advertise 70001 but then do not include a relay_flag
             if len(relay_flag):
                 self.relay = bool(struct.unpack('B', relay_flag)[0] & 1)
 
-    def toWire(self, buf, unused_version):
-        Packet.toWire(self, buf, unused_version)
+    def toWire(self, buf, opts=None):
+        Packet.toWire(self, buf, opts)
         buf.write(struct.pack("<IQQ", self.version, self.services,
                               self.timestamp))
-        self.addr_recv.toWire(buf, False)
-        self.addr_from.toWire(buf, False)
+        self.addr_recv.toWire(buf, {'version': 0})
+        self.addr_from.toWire(buf, {'version': 0})
         buf.write(self.nonce)
         buf.write(encodeVarString(self.user_agent))
         buf.write(struct.pack("<I", self.best_height))
@@ -143,14 +154,14 @@ class InvPacket(Packet):
     def __init__(self):
         self.hashes = []
 
-    def parse(self, payload, unused_version):
+    def parse(self, payload, opts):
         length = decodeVarLength(payload)
         while len(self.hashes) < length:
             t, = struct.unpack("<I", payload.read(4))
             h = payload.read(32)[::-1]
             self.hashes.append((t, h))
 
-    def toWire(self, buf, unused_version):
+    def toWire(self, buf, opts):
         buf.write(encodeVarLength(len(self.hashes)))
         for h in self.hashes:
             buf.write(struct.pack("<I", h[0]))
@@ -171,11 +182,11 @@ class PingPacket(Packet):
     def __init__(self):
         self.nonce = None
 
-    def parse(self, payload, version):
+    def parse(self, payload, opts):
         if payload:
             self.nonce = payload
 
-    def toWire(self, buf, unused_version):
+    def toWire(self, buf, opts):
         if self.nonce:
             buf.write(self.nonce)
 
@@ -194,20 +205,43 @@ class TxPacket(Packet):
         self.lock_time = 0
         self.version = 1
         self.witnesses = []
+        self.is_segwit = False
 
-    def parseSegwit(self, payload, version):
-        # TODO(cdecker) implement
-        print "Parsing segwit"
-        pass
-        
-    def parse(self, payload, version):
-        Packet.parse(self, payload, version)
+    def parseSegwit(self, payload, opts):
+        if decodeVarLength(payload) == 0:
+            return False
+
+        self.is_segwit = True
+        txInputCount = decodeVarLength(payload)
+        for _i in range(0, txInputCount):
+            prev_out = (
+                payload.read(32)[::-1],
+                struct.unpack("<I", payload.read(4))[0]
+            )
+            script_length = decodeVarLength(payload)
+            script = payload.read(script_length)
+            sequence, = struct.unpack("<I", payload.read(4))
+            self.inputs.append((prev_out, script, sequence))
+
+        txOutputCount = decodeVarLength(payload)
+        for _i in range(0, txOutputCount):
+            value, = struct.unpack("<Q", payload.read(8))
+            script = decodeVarString(payload)
+            self.outputs.append((value, script))
+
+        for i in range(0, txInputCount):
+            nelements = decodeVarLength(payload)
+            self.witnesses.append([decodeVarString(payload) for _ in range(nelements)])
+        self.lock_time, = struct.unpack("<I", payload.read(4))
+        return True
+
+    def parse(self, payload, opts):
+        Packet.parse(self, payload, opts)
 
         self.version, = struct.unpack("<I", payload.read(4))
         txInputCount = decodeVarLength(payload)
-
         if txInputCount == 0:
-            return
+            return self.parseSegwit(payload, opts)
 
         for _i in range(0, txInputCount):
             prev_out = (
@@ -225,10 +259,15 @@ class TxPacket(Packet):
             script = decodeVarString(payload)
             self.outputs.append((value, script))
         self.lock_time, = struct.unpack("<I", payload.read(4))
+        return True
 
-    def toWire(self, buf, version):
-        Packet.toWire(self, buf, version)
+    def toWire(self, buf, opts=None):
+        Packet.toWire(self, buf, opts)
         buf.write(struct.pack("<I", self.version))
+
+        if get_opt(opts, 'segwit', False):
+            buf.write("\x00\x01")
+
         buf.write(encodeVarLength(len(self.inputs)))
         for i in self.inputs:
             prev_out, script, sequence = i
@@ -243,6 +282,12 @@ class TxPacket(Packet):
             buf.write(struct.pack("<Q", value))
             buf.write(encodeVarString(script))
 
+        if get_opt(opts, 'segwit', False):
+            for w in self.witnesses:
+                buf.write(encodeVarLength(len(w)))
+                for e in w:
+                    buf.write(encodeVarString(e))
+
         buf.write(struct.pack("<I", self.lock_time))
 
     def hash(self):
@@ -253,7 +298,7 @@ class TxPacket(Packet):
         should happen rarely though.
         """
         buf = BytesIO()
-        self.toWire(buf, PROTOCOL_VERSION)
+        self.toWire(buf, {'segwit': False})
         return doubleSha256(buf.getvalue())[::-1]
 
     def is_coinbase(self):
@@ -291,8 +336,8 @@ class BlockPacket(Packet):
         self.nonce = None
         self.transactions = []
 
-    def parse(self, payload, version):
-        Packet.parse(self, payload, version)
+    def parse(self, payload, opts):
+        Packet.parse(self, payload, opts)
 
         self.version, self.prev_block, self.merkle_root = struct.unpack(
             '<I32s32s', payload.read(68))
@@ -303,12 +348,12 @@ class BlockPacket(Packet):
         transactionCount = decodeVarLength(payload)
         while len(self.transactions) < transactionCount:
             t = TxPacket()
-            t.parse(payload, version)
+            t.parse(payload, opts)
             self.transactions.append(t)
         self._hash = doubleSha256(payload.getvalue()[:80])[::-1]
 
-    def toWire(self, buf, version):
-        Packet.toWire(self, buf, version)
+    def toWire(self, buf, opts):
+        Packet.toWire(self, buf, opts)
         buf.write(struct.pack("<I32s32sIII",
                               self.version,
                               self.prev_block[::-1],
@@ -318,7 +363,7 @@ class BlockPacket(Packet):
                               self.nonce))
         buf.write(encodeVarLength(len(self.transactions)))
         for t in self.transactions:
-            t.toWire(buf, version)
+            t.toWire(buf, opts)
 
     def hash(self):
         """
@@ -331,7 +376,7 @@ class BlockPacket(Packet):
             return self._hash
         else:
             buf = BytesIO()
-            self.toWire(buf, PROTOCOL_VERSION)
+            self.toWire(buf, {'segwit': False, 'version': PROTOCOL_VERSION})
             return doubleSha256(buf.getvalue()[:80])[::-1]
 
 class GetaddrPacket(Packet):
@@ -344,17 +389,17 @@ class AddrPacket(Packet):
     def __init__(self):
         self.addresses = []
 
-    def parse(self, payload, version):
+    def parse(self, payload, opts):
         l = decodeVarLength(payload)
         for _ in range(0, l):
             a = Address()
-            a.parse(payload, version)
+            a.parse(payload, opts)
             self.addresses.append(a)
 
-    def toWire(self, buf, version):
+    def toWire(self, buf, opts):
         buf.write(encodeVarLength(len(self.addresses)))
         for a in self.addresses:
-            a.toWire(buf, version)
+            a.toWire(buf, opts)
 
 
 class VerackMessage(Packet):
@@ -374,16 +419,16 @@ class DummyPacket(Packet):
         self.type = None
         self.binrep = ""
 
-    def parse(self, payload, version):
+    def parse(self, payload, opts):
         self.binrep = payload.getvalue()
 
-    def toWire(self, buf, version):
+    def toWire(self, buf, opts):
         buf.write(self.binrep)
 
     def __str__(self):
         return "<DummyPacket[%s]>" % (self.type)
 
-    
+
 class FilterloadPacket(DummyPacket):
     type = 'filterload'
 

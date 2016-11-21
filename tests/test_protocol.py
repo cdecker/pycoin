@@ -56,13 +56,13 @@ class Test(unittest.TestCase):
             '010000000000000000000000000000000000FFFF0A000001208D'
         ).decode("hex")
         a = messages.Address()
-        a.parse(BytesIO(b), False)
+        a.parse(BytesIO(b), {'version': 0})
         self.assertTrue(a.isIPv4, "Is IPv4")
         self.assertEqual("10.0.0.1", a.ip, "IP")
         self.assertEqual(8333, a.port, "Port")
         self.assertEqual(1, a.services, "Services")
         buf = BytesIO()
-        a.toWire(buf, False)
+        a.toWire(buf, {'version': 0})
         self.assertEqual(
             b.encode("hex"),
             buf.getvalue().encode("hex")
@@ -75,15 +75,18 @@ class Test(unittest.TestCase):
             'FFFF0A000002208DDD9D202C3AB457130055810100'
         ).decode("hex")
         p = messages.VersionPacket()
-        p.parse(BytesIO(b), 70001)
+        p.parse(BytesIO(b), None)
         self.assertEquals(p.version, 31900, "Version")
         self.assertEquals(p.services, 1, "Services")
         self.assertEquals(p.timestamp, 1292899814)
         self.assertEqual("dd9d202c3ab45713", p.nonce.encode("hex"))
         self.assertEqual(98645, p.best_height)
 
+        self.assertEquals(p.addr_from.ip, '10.0.0.2')
+        self.assertEquals(p.addr_recv.ip, '10.0.0.1')
+        
         buf = BytesIO()
-        p.toWire(buf, 70001)
+        p.toWire(buf, {'version': p.version})
         self.assertEquals(
             b.encode("hex"),
             buf.getvalue().encode("hex")
@@ -96,10 +99,10 @@ class Test(unittest.TestCase):
             'c9af618c3ceda4e35eb20100000017e644fbcb3e92589ece8c42d88b2930c4d'
             '787d89e45415883ec61303bf88e42').decode("hex")
         i = messages.InvPacket()
-        i.parse(BytesIO(b), 70001)
+        i.parse(BytesIO(b), None)
 
         buf = BytesIO()
-        i.toWire(buf, 70001)
+        i.toWire(buf, None)
         self.assertEquals(b.encode("hex"), buf.getvalue().encode("hex"))
 
     def testTxPacket(self):
@@ -107,7 +110,7 @@ class Test(unittest.TestCase):
             os.path.join(BASENAME, 'resources', "tx-9c0f7b2.dmp")
         ).read())
         t = messages.TxPacket()
-        t.parse(b, 70001)
+        t.parse(b, None)
         self.assertEquals(b.tell(), len(b.getvalue()))
 
         self.assertEquals(1, len(t.inputs))
@@ -115,7 +118,7 @@ class Test(unittest.TestCase):
         self.assertEquals(t.lock_time, 0)
 
         buf = BytesIO()
-        t.toWire(buf, 70001)
+        t.toWire(buf, {'version': 70001})
         self.assertEquals(
             b.getvalue().encode("hex"),
             buf.getvalue().encode("hex")
@@ -128,7 +131,7 @@ class Test(unittest.TestCase):
             os.path.join(BASENAME, 'resources', "tx-9c0f7b2.dmp")
         ).read())
         t = messages.TxPacket()
-        t.parse(b, 70001)
+        t.parse(b, None)
 
         t._hash = None
         self.assertEquals(t.hash().encode("hex"), real_hash)
@@ -138,7 +141,7 @@ class Test(unittest.TestCase):
             os.path.join(BASENAME, 'resources', "block-188817.dmp")
         ).read())
         b = messages.BlockPacket()
-        b.parse(by, 70001)
+        b.parse(by, None)
 
         self.assertEquals(1342158910, b.timestamp)
         self.assertEquals(1, b.version)
@@ -151,7 +154,7 @@ class Test(unittest.TestCase):
         self.assertEquals(88, len(b.transactions))
 
         buf = BytesIO()
-        b.toWire(buf, 70001)
+        b.toWire(buf, None)
         self.assertEquals(len(by.getvalue()), len(buf.getvalue()))
 
     def testBlockHashing(self):
@@ -159,7 +162,7 @@ class Test(unittest.TestCase):
             os.path.join(BASENAME, 'resources', "block-188817.dmp")
         ).read())
         b = messages.BlockPacket()
-        b.parse(by, 70001)
+        b.parse(by, None)
 
         # Try the cached hash from parsing first
         self.assertEquals(
@@ -179,7 +182,7 @@ class Test(unittest.TestCase):
             '01E215104D010000000000000000000000000000000000FFFF0A000001208D'
         ).decode("hex"))
         a = messages.AddrPacket()
-        a.parse(b, 70001)
+        a.parse(b, None)
 
         self.assertEqual(1, len(a.addresses))
         address = a.addresses[0]
@@ -191,7 +194,7 @@ class Test(unittest.TestCase):
         self.assertEquals(8333, address.port)
 
         buf = BytesIO()
-        a.toWire(buf, 70001)
+        a.toWire(buf, {})
         self.assertEquals(
             b.getvalue().encode("hex"),
             buf.getvalue().encode("hex")
@@ -203,7 +206,7 @@ class Test(unittest.TestCase):
         ).decode("hex")
         b = BytesIO(p)
         a = messages.AddrPacket()
-        a.parse(b, 70001)
+        a.parse(b, None)
         self.assertEquals(len(p), len(a))
 
     def test_normalized_hash(self):
@@ -258,4 +261,30 @@ class Test(unittest.TestCase):
         self.assertEquals(
             p2.normalized_hash().encode('hex'),
             p2.hash().encode('hex')
+        )
+
+    def testSegwitTx(self):
+        txhash = "85b2c5e202950eb7dc87ff570d68e366d02a801759283c8c8ca66986e7f25242"
+        b = BytesIO(open(
+            os.path.join(BASENAME, 'resources', "segwit-tx.dmp")
+        ).read())
+        t = messages.TxPacket()
+        self.assertTrue(t.parse(b, {'segwit': True}))
+        self.assertEquals(b.tell(), len(b.getvalue()))
+
+        self.assertEquals(txhash, t.hash().encode('hex'))
+        
+        self.assertEquals(11, len(t.inputs))
+        self.assertEquals(11, len(t.outputs))
+        self.assertEquals(t.lock_time, 0)
+        self.assertEquals(11, len(t.witnesses))
+        self.assertTrue(t.is_segwit)
+        self.assertFalse(t.is_coinbase())
+
+        buf = BytesIO()
+        opts = {'segwit': True, 'version': 70001}
+        t.toWire(buf, opts)
+        self.assertEquals(
+            b.getvalue().encode("hex"),
+            buf.getvalue().encode("hex")
         )

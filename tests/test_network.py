@@ -29,8 +29,6 @@ class TestNetworkClient(unittest.TestCase):
         self.assertEqual('tx', message.type)
         self.assertIsInstance(message, messages.TxPacket)
 
-        self.assertFalse(connection.parse_message('unknown', ''))
-
     def test_misc(self):
         nc = network.NetworkClient()
         self.assertRaises(NotImplementedError, nc.run_forever)
@@ -71,7 +69,8 @@ class TestConnection(unittest.TestCase):
         Use Connection to serialize a message and GeventConnection to
         deserialize it again.
         """
-        connection = network.GeventConnection(mock.Mock(),
+        network_client = mock.MagicMock()
+        connection = network.GeventConnection(network_client,
                                               ('127.0.0.1', 8333),
                                               False)
         connection.socket = mock.Mock()
@@ -189,10 +188,11 @@ class TestUtil(unittest.TestCase):
         self.assertListEqual(res, [('68.48.214.241', 8333)])
 
 
-class TestBehvior(unittest.TestCase):
+class TestBehavior(unittest.TestCase):
 
     def setUp(self):
         self.network_client = mock.Mock()
+        self.network_client.bytes_sent = 0
         self.connection = mock.Mock(incoming=False, host=('127.0.0.1', 8333))
 
     def test_client_behavior_init(self):
