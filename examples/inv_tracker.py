@@ -29,6 +29,8 @@ def on_tx(connection, tx):
 
 def on_block(connection, b):
     print len(b.transactions), b.hash().encode("hex")
+    cb = b.transactions[0]
+    print len(cb.inputs), len(cb.outputs), cb.outputs[1][1].encode('hex')
 
 def start():
     client = network.GeventNetworkClient()

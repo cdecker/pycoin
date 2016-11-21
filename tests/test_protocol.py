@@ -265,6 +265,7 @@ class Test(unittest.TestCase):
 
     def testSegwitTx(self):
         txhash = "85b2c5e202950eb7dc87ff570d68e366d02a801759283c8c8ca66986e7f25242"
+        wtxhash = "da9f24ac73ba45e28f87510b9515e7ab6591d3a86aec6b59d5447cdf2e22ca38"
         b = BytesIO(open(
             os.path.join(BASENAME, 'resources', "segwit-tx.dmp")
         ).read())
@@ -288,3 +289,5 @@ class Test(unittest.TestCase):
             b.getvalue().encode("hex"),
             buf.getvalue().encode("hex")
         )
+
+        self.assertEquals(wtxhash, t.whash().encode('hex'))

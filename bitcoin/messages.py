@@ -301,6 +301,13 @@ class TxPacket(Packet):
         self.toWire(buf, {'segwit': False})
         return doubleSha256(buf.getvalue())[::-1]
 
+    def whash(self):
+        if self.is_coinbase():
+            return "00".decode('hex')*32
+        buf = BytesIO()
+        self.toWire(buf, {'segwit': self.is_segwit})
+        return doubleSha256(buf.getvalue())[::-1]
+
     def is_coinbase(self):
         return (len(self.inputs) == 1 and
                 self.inputs[0][0][0] == '\0'*32 and
