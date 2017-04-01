@@ -26,6 +26,11 @@ testnet_params = {
     'port': 18333,
 }
 
+regtest_params = {
+    'magic': 'FABFB5DA'.decode("hex"),
+    'port': 18444,
+}
+
 params = mainnet_params
 
 DNS_SEEDS = [
